@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coursera Information Security - Nền tảng học thuật ATTT</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: "class" };
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="coursera-style.css" />
+    
+  </head>
+  <body class="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-gray-900 dark:text-gray-100 transition-colors duration-300">
+    
+    <!-- Top Marquee (Dòng chữ chạy) -->
+    <div class="bg-gradient-to-r from-[#0056D2] to-blue-800 text-white text-xs font-bold py-2 overflow-hidden flex whitespace-nowrap shrink-0 z-[100] relative shadow-sm cursor-default">
+      <div class="animate-marquee">
+        🚀 THÔNG BÁO: Chào mừng đến với Coursera Advanced! Hệ thống Kali Linux Sandbox đã được nâng cấp lên phiên bản mới nhất. Hãy hoàn thành các lộ trình ghi danh để mở khóa ngay môi trường thực chiến nhé! 🛡️
+      </div>
+    </div>
+
+    <!-- Page Loader -->
+    <div id="page-loader" class="fixed inset-0 bg-slate-50 dark:bg-[#0B0F19] z-[9999] flex items-center justify-center transition-opacity duration-500">
+      <div class="w-12 h-12 border-4 border-slate-200 dark:border-slate-700 border-t-[#0056D2] rounded-full animate-spin"></div>
+    </div>
+
+    <header class="h-16 shrink-0 flex items-center justify-between px-6 bg-white dark:bg-[#0B0F19] border-b border-gray-200 dark:border-slate-800 shadow-[0_1px_2px_rgba(0,0,0,0.03)] z-20">
+      <div class="flex items-center gap-3">
+        <h1 onclick="App.showCatalogView()" class="text-2xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 cursor-pointer">Coursera</h1>
+        <span class="hidden md:inline text-xs font-bold px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 rounded-lg">Information Security</span>
+      </div>
+      
+      <div class="flex items-center gap-3 md:gap-5">
+        <button id="btn-back-to-dashboard" onclick="App.showCatalogView()" class="hidden text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-house"></i> Trang chủ
+        </button>
+
+        <button onclick="App.toggleTheme()" class="w-9 h-9 rounded-xl bg-gray-100 dark:bg-slate-800 flex items-center justify-center text-gray-600 dark:text-yellow-400 hover:bg-gray-200 dark:hover:bg-slate-700 transition shadow-sm border border-gray-200 dark:border-slate-700">
+          <i class="fa-solid fa-moon dark:hidden"></i>
+          <i class="fa-solid fa-sun hidden dark:block"></i>
+        </button>
+        
+        <div class="relative group cursor-pointer z-50">
+          <div class="w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-sm text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-sm hover:ring-2 hover:ring-[#0056D2]/30 transition-all">
+            AT
+          </div>
+          <div class="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-800 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] dark:shadow-none border border-gray-200 dark:border-slate-700 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform translate-y-2 group-hover:translate-y-0">
+            <div class="p-4 border-b border-gray-100 dark:border-slate-700/50 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-[#0056D2]/10 text-[#0056D2] dark:bg-blue-500/20 dark:text-blue-400 flex items-center justify-center font-bold">AT</div>
+              <div>
+                <p class="text-sm font-bold text-gray-900 dark:text-white leading-tight" id="user-fullname-display">Đang tải...</p>
+                <p class="text-[11px] text-gray-500 font-semibold" id="user-email-display">student@coursera.vn</p>
+              </div>
+            </div>
+            <ul class="py-2 text-[13px] font-semibold text-gray-700 dark:text-gray-300">
+              <li id="admin-menu-item" class="hidden"><a href="admin.html" class="block px-4 py-2 hover:bg-purple-50 dark:hover:bg-purple-900/20 flex items-center gap-3 text-purple-600 dark:text-purple-400 font-bold border-b border-gray-100 dark:border-slate-700/50 pb-2 mb-1"><i class="fa-solid fa-user-shield w-4 text-center"></i> Vào Trang Quản Trị</a></li>
+              <li><a href="#" onclick="openAccountModal('profile')" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 flex items-center gap-3"><i class="fa-regular fa-id-card w-4 text-center"></i> Thông tin học viên</a></li>
+              <li><a href="#" onclick="openAccountModal('my_courses')" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 flex items-center gap-3"><i class="fa-solid fa-layer-group w-4 text-center"></i> Khóa học của bạn</a></li>
+              <li><a href="#" onclick="openAccountModal('security')" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 flex items-center gap-3"><i class="fa-solid fa-key w-4 text-center"></i> Đổi mật khẩu</a></li>
+              <li><a href="#" onclick="openAccountModal('orders')" class="block px-4 py-2 hover:bg-gray-50 dark:hover:bg-slate-700/50 flex items-center gap-3"><i class="fa-solid fa-clock-rotate-left w-4 text-center"></i> Lịch sử đã mua </a></li>
+              <div class="h-px bg-gray-100 dark:bg-slate-700/50 my-1"></div>
+              <li><a href="#" onclick="logoutUser()" class="block px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 flex items-center gap-3"><i class="fa-solid fa-arrow-right-from-bracket w-4 text-center"></i> Đăng xuất</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Wrapper -->
+    <div class="flex-1 overflow-y-auto">
+      <main id="dashboard-view" class="flex-1 overflow-y-auto px-6 py-8 md:px-12 animate-fade-in-up block">
+        <div class="max-w-7xl mx-auto space-y-8">
+          <div id="hero-section" class="bg-white dark:bg-[#161B22] rounded-xl relative overflow-hidden flex flex-col md:flex-row items-center border border-gray-200 dark:border-slate-800 mb-8">
+            <div class="flex-1 relative z-10 p-8 md:p-12">
+              <h2 class="text-3xl md:text-5xl font-bold mb-4 leading-tight text-gray-900 dark:text-white tracking-tight">Học không giới hạn.<br><span class="text-[#0056D2] dark:text-blue-500">Xây dựng tương lai an toàn.</span></h2>
+              <p class="text-gray-600 dark:text-gray-400 text-sm md:text-base max-w-lg mb-8 font-medium leading-relaxed">Phát triển kỹ năng An toàn thông tin chuẩn quốc tế với các lộ trình đào tạo chuyên sâu, Lab thực chiến và nhận Chứng chỉ uy tín từ Coursera Advanced.</p>
+              <div class="flex flex-wrap gap-4">
+                  <button onclick="document.getElementById('course-search-input').focus()" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 px-8 rounded transition-colors shadow-sm">
+                    Khám phá lộ trình
+                  </button>
+                  <button class="bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-[#0056D2] dark:text-blue-400 border border-[#0056D2] dark:border-blue-500 font-bold py-3 px-8 rounded transition-colors">
+                    Dành cho Doanh nghiệp
+                  </button>
+              </div>
+            </div>
+            <div class="w-full md:w-5/12 h-64 md:h-full relative shrink-0 hidden md:block bg-gray-100 dark:bg-slate-800">
+              <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1000&auto=format&fit=crop" alt="Learning" class="w-full h-full object-cover absolute inset-0">
+              <div class="absolute inset-0 bg-gradient-to-r from-white dark:from-[#161B22] to-transparent w-32"></div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-4">
+              <h3 id="main-section-title" class="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                Khám phá lộ trình chuyên sâu
+              </h3>
+              <span class="text-sm text-gray-500 font-semibold whitespace-nowrap" id="course-count">Hiện thị 0 lộ trình</span>
+            </div>
+            
+            <div id="dashboard-courses-grid"></div>
+            <div id="dashboard-pagination" class="pt-4 flex justify-center"></div>
+          </div>
+        </div>
+
+        <!-- Footer được đưa vào trong Dashboard để cuộn theo trang và tự động ẩn khi vào khóa học -->
+        <footer class="bg-white dark:bg-[#0B0F19] border-t border-gray-200 dark:border-slate-800 pt-16 pb-8 px-6 shrink-0 z-10 -mx-6 md:-mx-12 -mb-8 mt-12">
+          <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
+            <div class="col-span-2 lg:col-span-1">
+              <h3 class="text-xl font-black text-[#0056D2] tracking-tight dark:text-blue-500">coursera</h3>
+              <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Nền tảng học thuật chuyên sâu về An toàn thông tin, cung cấp môi trường Lab thực chiến.</p>
+              <div class="flex gap-4 mt-4">
+                <a href="#" class="text-gray-400 hover:text-[#0056D2] dark:hover:text-blue-400"><i class="fab fa-facebook-f"></i></a>
+                <a href="#" class="text-gray-400 hover:text-[#0056D2] dark:hover:text-blue-400"><i class="fab fa-youtube"></i></a>
+                <a href="#" class="text-gray-400 hover:text-[#0056D2] dark:hover:text-blue-400"><i class="fab fa-github"></i></a>
+                <a href="#" class="text-gray-400 hover:text-[#0056D2] dark:hover:text-blue-400"><i class="fab fa-linkedin-in"></i></a>
+              </div>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-3">Sản phẩm</h4>
+              <ul class="space-y-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                <li><a href="#" class="hover:text-[#0056D2]">Lộ trình học</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">Cloud Labs</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">CyberAI Assistant</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-3">Công ty</h4>
+              <ul class="space-y-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                <li><a href="#" class="hover:text-[#0056D2]">Về chúng tôi</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">Tuyển dụng</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">Báo chí</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-gray-900 dark:text-white mb-3">Hỗ trợ</h4>
+              <ul class="space-y-2 text-xs text-gray-500 dark:text-gray-400 font-semibold">
+                <li><a href="#" class="hover:text-[#0056D2]">Trung tâm trợ giúp</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">Điều khoản dịch vụ</a></li>
+                <li><a href="#" class="hover:text-[#0056D2]">Chính sách bảo mật</a></li>
+              </ul>
+            </div>
+          </div>
+          <div class="mt-12 border-t border-gray-200 dark:border-slate-800 pt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+            <p>&copy; 2024 Coursera Advanced. All rights reserved. A project for educational purposes.</p>
+          </div>
+        </footer>
+      </main>
+
+      <div id="learning-view" class="hidden flex-1 flex overflow-hidden relative w-full h-full animate-fade">
+        <div id="sidebar-backdrop" onclick="App.toggleSidebar()" class="hidden fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity"></div>
+        <nav id="app-sidebar" class="w-[280px] shrink-0 absolute md:relative z-40 transform -translate-x-full md:translate-x-0 transition-all duration-300 ease-in-out border-r border-gray-200 dark:border-slate-800 bg-white dark:bg-[#0B0F19] flex flex-col h-full overflow-hidden">
+          <div class="p-4 border-b border-gray-200 dark:border-slate-800 shrink-0 space-y-3">
+            <button onclick="App.showCatalogView()" class="w-full py-2 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-xl font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-sm border border-gray-200 dark:border-slate-700">
+              <i class="fa-solid fa-arrow-left text-[10px]"></i> Xem lại lộ trình
+            </button>
+            <div>
+              <label class="block text-[9px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Module chuyên ngành</label>
+              <select id="course-selector" onchange="App.switchCourse(this.value)" class="w-full px-2.5 py-2 text-xs font-bold bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-gray-800 dark:text-white cursor-pointer focus:ring-2 focus:ring-[#0056D2]/20 transition-all"></select>
+            </div>
+            <div class="h-px bg-gray-200 dark:bg-slate-800 my-1"></div>
+            <h2 id="sidebar-course-title" class="font-extrabold text-[14px] text-gray-900 dark:text-white leading-tight min-h-[36px]">Đang tải module...</h2>
+            <div>
+              <div class="flex items-center justify-between text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                <span>Mức độ hoàn thiện</span>
+                <span id="overall-progress-text" class="text-[#0056D2] dark:text-blue-400">0%</span>
+              </div>
+              <div class="mt-1.5 h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden border border-gray-200 dark:border-slate-700">
+                <div id="overall-progress" class="bg-[#0056D2] dark:bg-blue-500 h-full w-0 transition-all duration-700 ease-out"></div>
+              </div>
+            </div>
+          </div>
+          <div class="flex-1 overflow-y-auto py-2 scrollbar-thin" id="course-navigation"></div>
+        </nav>
+
+        <div class="flex-1 flex flex-col min-w-0">
+          <main class="flex-1 flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-50 dark:bg-slate-900/50">
+            <div class="flex-1 flex flex-col lg:overflow-hidden border-r border-gray-200 dark:border-slate-800 bg-white dark:bg-[#0B0F19]">
+              
+              <div class="w-full aspect-video bg-black relative shrink-0 shadow-sm z-10" id="video-wrapper"></div>
+
+              <div class="p-6 md:p-8 flex-1 lg:overflow-y-auto">
+                <div class="max-w-4xl mx-auto">
+                  <div class="flex items-start justify-between gap-4 mb-4">
+                  <h2 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-tight w-full" id="lesson-main-title">
+                    <div class="h-8 bg-gray-200 dark:bg-slate-700 rounded w-2/3 animate-pulse"></div>
+                  </h2>
+                    <span class="shrink-0 text-xs font-bold px-2.5 py-1 bg-green-500/10 text-green-500 dark:text-green-400 rounded-lg flex items-center gap-1"><i class="fa-solid fa-signal text-[10px] animate-pulse"></i> Trực tuyến</span>
+                  </div>
+                  
+                  <div class="flex flex-wrap gap-x-6 gap-y-2 border-b border-gray-200 dark:border-slate-800 mb-6 mt-4">
+                    <button id="tab-btn-slides" onclick="App.switchTab('slides')" class="pb-3 border-b-2 border-[#0056D2] text-[#0056D2] dark:text-blue-400 font-bold text-sm transition-colors flex items-center gap-1.5"><i class="fa-regular fa-file-powerpoint"></i> Tài liệu (PDF)</button>
+                    <button id="tab-btn-quiz" onclick="App.switchTab('quiz')" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 font-semibold text-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-microchip"></i> Đánh giá năng lực</button>
+                    <button id="tab-btn-desc" onclick="App.switchTab('desc')" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 font-semibold text-sm transition-colors">Tóm tắt kỹ thuật</button>
+                    <button id="tab-btn-resources" onclick="App.switchTab('resources')" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 font-semibold text-sm transition-colors">Tệp tin LAB</button>
+                  </div>
+
+                  <div id="tab-content-slides" class="block animate-fade">
+                    <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 text-center aspect-video flex flex-col justify-center items-center">
+                      <i class="fa-solid fa-file-shield text-6xl text-[#0056D2] mb-4 opacity-80 animate-bounce"></i>
+                      <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2">Tài nguyên học thuật chuẩn hóa</h3>
+                      <p class="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-md">Bản trình bày phân tích chuyên sâu về kiến trúc hệ thống và biểu đồ véc-tơ tấn công.</p>
+                      <button onclick="App.downloadPdf()" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-md flex items-center gap-2"><i class="fa-solid fa-download"></i> Tải báo cáo PDF an toàn</button>
+                    </div>
+                  </div>
+
+                  <div id="tab-content-quiz" class="hidden">
+                    <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 mt-2">
+                      <div class="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-700 pb-4">
+                        <div>
+                          <h3 class="text-lg font-black text-gray-900 dark:text-white">Kiểm tra chuyên môn (Quiz)</h3>
+                          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Hoàn thành bài trắc nghiệm hệ thống để cập nhật chứng nhận tiến trình.</p>
+                        </div>
+                      </div>
+                      <div class="space-y-6" id="quiz-container">
+                        <div class="quiz-question">
+                          <p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3" id="quiz-question-text">Đang đồng bộ truy vấn...</p>
+                          <div class="space-y-2" id="quiz-options-wrapper"></div>
+                        </div>
+                      </div>
+                      <button onclick="App.submitQuiz()" class="mt-6 bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-server text-xs"></i> Gửi dữ liệu xác thực</button>
+                      <div id="quiz-result" class="mt-4 hidden text-sm font-bold p-3.5 rounded-xl border"></div>
+                    </div>
+                  </div>
+
+                  <div id="tab-content-desc" class="hidden"><p class="text-base text-gray-600 dark:text-gray-300 font-medium leading-relaxed" id="lesson-main-desc">Đang phân tích...</p></div>
+                  
+                  <div id="tab-content-resources" class="hidden">
+                    <div class="p-5 border border-dashed border-gray-300 dark:border-slate-700 rounded-xl bg-gray-50/50 dark:bg-slate-800/30 text-center">
+                      <i class="fa-solid fa-folder-tree text-4xl text-gray-400 mb-3"></i>
+                      <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Không có tệp lệnh phụ trợ đính kèm cho session này.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="w-full lg:w-[420px] shrink-0 flex flex-col min-h-[600px] lg:min-h-0 lg:h-full bg-white dark:bg-[#0B0F19] z-20 shadow-[-4px_0_24px_rgba(0,0,0,0.02)] border-l border-gray-200 dark:border-slate-800 relative">
+              <div class="flex bg-gray-100/70 dark:bg-[#161B22] border-b border-gray-200 dark:border-slate-800 p-1.5 shrink-0 gap-1">
+                <button id="sidebar-tab-btn-chat" onclick="App.switchSidebarTab('chat')" class="flex-1 py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 bg-white dark:bg-[#0D1117] text-[#0056D2] dark:text-blue-400 shadow-sm">
+                  <i class="fa-solid fa-user-astronaut"></i> Trợ lý Cyber AI
+                </button>
+                <button id="sidebar-tab-btn-terminal" onclick="App.switchSidebarTab('terminal')" class="flex-1 py-2 text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 text-gray-500 hover:text-gray-900 dark:hover:text-gray-300">
+                  <i class="fa-solid fa-terminal"></i> Kali Linux Sandbox
+                </button>
+              </div>
+
+              <div id="ai-chat-wrapper" class="flex-1 flex flex-col min-h-0 transition-all duration-300">
+                <div class="p-4 overflow-y-auto flex-1 space-y-4" id="ai-chat-log"></div>
+                <div class="p-3 border-t border-gray-200 dark:border-slate-800 shrink-0">
+                  <div class="flex gap-2 p-1 bg-gray-50 dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 focus-within:border-[#0056D2] focus-within:ring-2 focus-within:ring-[#0056D2]/20 transition-all">
+                    <input type="text" id="ai-chat-input" placeholder="Hỏi trợ lý CyberAI..." class="flex-1 bg-transparent px-3 py-1.5 text-sm outline-none text-slate-800 dark:text-slate-100" autocomplete="off" />
+                    <button onclick="App.sendAiMessage()" class="w-9 h-9 bg-[#0056D2] hover:bg-blue-700 text-white rounded-lg flex items-center justify-center transition shrink-0"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="terminal-wrapper" class="hidden flex-1 flex flex-col bg-[#0D1117] font-mono text-sm relative transition-all duration-300">
+                <div class="px-4 py-2.5 bg-[#161B22] border-b border-[#30363D] flex items-center justify-between shrink-0 shadow-sm">
+                  <span class="text-slate-400 text-[10px] font-bold tracking-widest flex items-center gap-2">
+                    <i class="fa-brands fa-linux text-emerald-400"></i> KALI LINUX SECURE SANDBOX
+                  </span>
+                  <button onclick="App.resetTerminalConsole()" class="text-slate-500 hover:text-white transition-colors" title="Khởi động lại Lab"><i class="fa-solid fa-rotate-right text-xs"></i></button>
+                </div>
+                <div id="terminal-body" class="flex-1 flex flex-col min-h-0">
+                  <div class="flex-1 p-4 overflow-y-auto text-emerald-400 whitespace-pre-wrap leading-relaxed text-[13px]" id="terminal-scroll-box">
+                    <div id="terminal-history" class="space-y-1"></div>
+                  </div>
+                  <div class="p-3 bg-[#0D1117] focus-within:bg-[#161B22] flex items-center gap-2 shrink-0 border-t border-[#30363D]">
+                    <span class="text-slate-500 font-bold shrink-0">root@kali:~#</span>
+                    <input type="text" id="terminal-cmd-input" class="flex-1 bg-transparent text-emerald-400 outline-none terminal-input font-bold text-sm" spellcheck="false" autocomplete="off" />
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div id="payment-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden opacity-100 transition-all duration-300">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-md mx-4 rounded-3xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl space-y-5 animate-fade">
+        <div class="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-qrcode text-xl text-[#0056D2] dark:text-blue-500"></i>
+            <h3 class="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wider">Cổng Thanh Toán VietQR</h3>
+          </div>
+          <button onclick="closePaymentModal()" class="text-gray-400 hover:text-gray-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="bg-gray-50 dark:bg-slate-950 p-4 rounded-2xl space-y-2 text-xs font-semibold text-gray-600 dark:text-gray-400">
+          <div class="flex justify-between"><span class="text-gray-400">Khóa học ghi danh:</span><span id="pay-course-title" class="text-gray-900 dark:text-white text-right font-black max-w-[240px] line-clamp-1">---</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Giá niêm yết:</span><span id="pay-price" class="text-[#0056D2] dark:text-blue-400 text-sm font-black">0 đ</span></div>
+          <div class="flex flex-col gap-1 border-t border-dashed border-gray-200 dark:border-slate-800 pt-2">
+            <span class="text-gray-400">Nội dung chuyển khoản bắt buộc:</span>
+            <span id="pay-memo" class="bg-blue-500/10 text-[#0056D2] dark:text-blue-400 text-center font-mono font-black py-1.5 rounded-xl select-all border border-blue-500/20 text-xs">---</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-center justify-center p-3 bg-white rounded-2xl border border-gray-100 shadow-inner w-56 h-56 mx-auto relative">
+          <img id="pay-qr-img" src="" alt="VietQR Core API Loading..." class="w-full h-full object-contain">
+        </div>
+        <p class="text-[10px] text-gray-400 font-bold text-center uppercase tracking-wide"><i class="fa-solid fa-expand text-[9px] mr-1 text-green-500"></i> Quét mã qua App Ngân hàng</p>
+        <div class="flex flex-col gap-2 pt-2">
+          <button id="btn-confirm-mock-pay" onclick="App.confirmMockPayment()" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-black py-2.5 rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2">
+            <i class="fa-solid fa-circle-check"></i> Tôi đã chuyển khoản thành công
+          </button>
+          <button onclick="closePaymentModal()" class="w-full hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500 dark:text-gray-400 font-bold py-2 rounded-xl text-xs transition">Hủy giao dịch</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="account-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center hidden opacity-0 transition-opacity duration-300">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-5xl rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-800 max-h-[90vh] flex flex-col overflow-hidden mx-4">
+        <div class="px-6 py-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <h3 class="font-black text-lg text-gray-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-sliders text-[#0056D2] dark:text-blue-500"></i> Cài đặt tài khoản</h3>
+          <button onclick="closeAccountModal()" class="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-gray-200 transition"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
+          <div class="w-full md:w-64 bg-gray-50/50 dark:bg-slate-950/50 border-b md:border-b-0 md:border-r border-gray-100 dark:border-slate-800 p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible shrink-0 text-[13px] font-bold text-gray-600 dark:text-gray-400">
+            <button id="subtab-btn-profile" onclick="switchSubTab('profile')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition w-full whitespace-nowrap bg-blue-50 dark:bg-blue-950/40 text-[#0056D2] dark:text-blue-400"><i class="fa-regular fa-id-card w-4 text-center"></i> Hồ sơ</button>
+            <button id="subtab-btn-my_courses" onclick="switchSubTab('my_courses')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition w-full whitespace-nowrap hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-layer-group w-4 text-center"></i> Khóa học của bạn</button>
+            <button id="subtab-btn-security" onclick="switchSubTab('security')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition w-full whitespace-nowrap hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-key w-4 text-center"></i> Đổi mật khẩu</button>
+            <button id="subtab-btn-orders" onclick="switchSubTab('orders')" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition w-full whitespace-nowrap hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-clock-rotate-left w-4 text-center"></i> Lịch sử ghi danh</button>
+          </div>
+          <div class="flex-1 p-8 overflow-y-auto min-h-0 text-sm">
+            <div id="subtab-content-profile" class="block space-y-4">
+              <h4 class="font-black text-gray-900 dark:text-white text-lg">Thông tin học viên</h4>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 dark:bg-slate-800/30 p-6 rounded-xl border border-gray-100 dark:border-slate-800">
+                <div><p class="text-xs text-gray-400 font-bold uppercase mb-1">Họ và tên</p><p id="md-user-name" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p></div>
+                <div><p class="text-xs text-gray-400 font-bold uppercase mb-1">Email tài khoản</p><p id="md-user-email" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p></div>
+                <div><p class="text-xs text-gray-400 font-bold uppercase mb-1">Ngày gia nhập</p><p id="md-user-date" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p></div>
+              </div>
+            </div>
+            <form id="md-password-form" onsubmit="handleModalChangePassword(event)" class="hidden space-y-4">
+              <h4 class="font-black text-gray-900 dark:text-white text-lg">Đổi mật khẩu</h4>
+              <div class="space-y-4 max-w-md">
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">Mật khẩu hiện tại</label><input id="md-old-pwd" type="password" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none" required></div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">Mật khẩu mới</label><input id="md-new-pwd" type="password" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none" required></div>
+                <div><label class="block text-xs font-bold text-gray-500 mb-1">Xác nhận mật khẩu mới</label><input id="md-confirm-pwd" type="password" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none" required></div>
+              </div>
+              <button type="submit" id="md-pwd-btn" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition shadow-sm mt-4">Cập nhật mật khẩu</button>
+              <p id="md-pwd-msg" class="text-xs font-bold hidden mt-2"></p>
+            </form>
+            <div id="subtab-content-my_courses" class="hidden space-y-4">
+              <h4 class="font-black text-gray-900 dark:text-white text-lg">Không gian học tập</h4>
+              <div id="md-my-courses-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+            </div>
+            <div id="subtab-content-orders" class="hidden space-y-5">
+              <h4 class="font-black text-gray-900 dark:text-white text-lg">Lịch sử giao dịch</h4>
+              <div id="md-orders-container" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div id="review-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden opacity-0 transition-all duration-300">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-md mx-4 rounded-3xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl space-y-5 animate-fade">
+        <div class="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-3">
+          <h3 class="font-black text-lg text-gray-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-star text-yellow-400"></i> Đánh giá khóa học</h3>
+          <button onclick="closeReviewModal()" class="text-gray-400 hover:text-gray-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="review-form" onsubmit="App.submitReview(event)" class="space-y-4">
+          <div class="flex justify-center gap-2 py-2" id="star-rating-container">
+            <i class="fa-solid fa-star text-3xl cursor-pointer text-gray-300 dark:text-gray-600 hover:scale-110 transition-transform" onclick="App.setRating(1)"></i>
+            <i class="fa-solid fa-star text-3xl cursor-pointer text-gray-300 dark:text-gray-600 hover:scale-110 transition-transform" onclick="App.setRating(2)"></i>
+            <i class="fa-solid fa-star text-3xl cursor-pointer text-gray-300 dark:text-gray-600 hover:scale-110 transition-transform" onclick="App.setRating(3)"></i>
+            <i class="fa-solid fa-star text-3xl cursor-pointer text-gray-300 dark:text-gray-600 hover:scale-110 transition-transform" onclick="App.setRating(4)"></i>
+            <i class="fa-solid fa-star text-3xl cursor-pointer text-gray-300 dark:text-gray-600 hover:scale-110 transition-transform" onclick="App.setRating(5)"></i>
+          </div>
+          <input type="hidden" id="review-course-id" value="">
+          <div>
+            <textarea id="review-text" rows="3" class="w-full px-4 py-3 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-[#0056D2]/20 resize-none" placeholder="Chia sẻ cảm nhận của bạn về lộ trình này..."></textarea>
+          </div>
+          <button type="submit" id="submit-review-btn" class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 rounded-xl transition-colors shadow-md flex justify-center items-center gap-2"><i class="fa-solid fa-paper-plane"></i> Gửi đánh giá</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Congratulation Modal -->
+    <div id="congrats-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center hidden opacity-0 transition-all duration-500">
+      <div class="bg-white dark:bg-slate-900 w-full max-w-md mx-4 rounded-3xl p-8 border border-gray-100 dark:border-slate-800 shadow-2xl text-center relative overflow-hidden transform scale-95 transition-transform duration-500" id="congrats-modal-content">
+        <div class="absolute -top-20 -right-20 w-40 h-40 bg-green-500/20 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-20 -left-20 w-40 h-40 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+        
+        <div class="w-24 h-24 bg-green-100 dark:bg-green-900/30 text-green-500 rounded-full flex items-center justify-center mx-auto mb-6 border-4 border-white dark:border-slate-900 shadow-lg relative z-10">
+            <i class="fa-solid fa-graduation-cap text-4xl animate-bounce"></i>
+        </div>
+        
+        <h3 class="text-2xl font-black text-gray-900 dark:text-white mb-2 relative z-10">Chúc mừng bạn!</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-8 relative z-10">Lộ trình <strong id="congrats-course-title" class="text-[#0056D2] dark:text-blue-400">---</strong> đã được phê duyệt thành công. Bạn đã có quyền truy cập vào toàn bộ nội dung.</p>
+        
+        <button onclick="App.closeCongratsModal()" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-md relative z-10 flex justify-center items-center gap-2">
+            Vào học ngay <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <script>
+      function closePaymentModal() {
+        const modal = document.getElementById('payment-modal');
+        if(modal) modal.classList.add('hidden');
+      }
+    </script>
+
+    <script src="coursera-script.js?v=1000"></script>
+
+  </body>
+</html>

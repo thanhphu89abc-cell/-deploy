@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="vi" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng ký - Coursera Advanced</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: "class" };</script>
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  
+  <link rel="stylesheet" href="coursera-style.css" />
+</head>
+<body class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0B0F19] transition-colors duration-300 px-4 font-['Source_Sans_Pro'] py-10">
+
+  <div class="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-gray-100 dark:border-slate-800 p-8 relative overflow-hidden animate-fade-in-up">
+    
+    <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#0056D2]/5 dark:bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+    <div class="text-center mb-8 relative z-10">
+      <h1 class="text-3xl font-black text-[#0056D2] tracking-tight mb-2">coursera</h1>
+      <p class="text-gray-500 dark:text-gray-400 font-semibold">Khởi đầu hành trình An ninh mạng</p>
+    </div>
+
+    <form id="register-form" class="space-y-4 relative z-10">
+      
+      <div>
+        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Họ và tên</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i class="fa-regular fa-user text-gray-400"></i>
+          </div>
+          <input id="fullname-input" type="text" placeholder="Nguyễn Văn A" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Email</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i class="fa-regular fa-envelope text-gray-400"></i>
+          </div>
+          <input id="email-input" type="email" placeholder="student@example.com" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Mật khẩu</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i class="fa-solid fa-lock text-gray-400"></i>
+          </div>
+          <input id="password-input" type="password" placeholder="Tối thiểu 6 ký tự" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all" required>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Xác nhận mật khẩu</label>
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <i class="fa-solid fa-shield-halved text-gray-400"></i>
+          </div>
+          <input id="confirm-password-input" type="password" placeholder="Nhập lại mật khẩu" class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all" required>
+        </div>
+      </div>
+
+      <div class="flex items-start mt-4">
+        <div class="flex items-center h-5">
+          <input id="terms" type="checkbox" class="h-4 w-4 text-[#0056D2] focus:ring-[#0056D2] border-gray-300 rounded cursor-pointer" required>
+        </div>
+        <label for="terms" class="ml-2 block text-xs text-gray-600 dark:text-gray-400 cursor-pointer leading-relaxed">
+          Tôi đồng ý với <a href="#" class="text-[#0056D2] dark:text-blue-400 font-bold hover:underline">Điều khoản Dịch vụ</a> và <a href="#" class="text-[#0056D2] dark:text-blue-400 font-bold hover:underline">Chính sách Bảo mật</a> của Coursera.
+        </label>
+      </div>
+
+      <button id="submit-btn" type="submit" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm flex justify-center items-center mt-2">
+        <span>Đăng ký ngay</span>
+      </button>
+
+      <div id="status-msg" class="hidden mt-3 text-center text-sm font-bold"></div>
+
+    </form>
+
+    <div class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400 font-medium relative z-10">
+      Đã có tài khoản? <a href="login.html" class="text-[#0056D2] dark:text-blue-400 font-bold hover:underline">Đăng nhập</a>
+    </div>
+  </div>
+
+  <script>
+    // BỔ SUNG: Thêm từ khóa 'async' vào function để dùng được 'await'
+    document.getElementById('register-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const fullname = document.getElementById('fullname-input').value.trim();
+        const email = document.getElementById('email-input').value.trim();
+        const password = document.getElementById('password-input').value;
+        const confirmPassword = document.getElementById('confirm-password-input').value;
+        
+        const btn = document.getElementById('submit-btn');
+        const statusMsg = document.getElementById('status-msg');
+
+        // Reset thông báo
+        statusMsg.classList.remove('text-red-500', 'text-green-500', 'dark:text-red-400', 'dark:text-green-400');
+        statusMsg.classList.add('hidden');
+        
+        // Validation: Kiểm tra mật khẩu khớp nhau
+        if (password !== confirmPassword) {
+            statusMsg.innerText = 'Mật khẩu xác nhận không khớp!';
+            statusMsg.classList.add('text-red-500', 'dark:text-red-400');
+            statusMsg.classList.remove('hidden');
+            return;
+        }
+
+        // Validation: Độ dài mật khẩu
+        if (password.length < 6) {
+            statusMsg.innerText = 'Mật khẩu phải có ít nhất 6 ký tự.';
+            statusMsg.classList.add('text-red-500', 'dark:text-red-400');
+            statusMsg.classList.remove('hidden');
+            return;
+        }
+
+        // Hiệu ứng Loading
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Đang tạo tài khoản...`;
+        btn.disabled = true;
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+
+        try {
+            const response = await fetch('register.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ fullname: fullname, email: email, password: password })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                btn.innerHTML = `<i class="fa-solid fa-check mr-2"></i> Thành công!`;
+                btn.classList.replace('bg-[#0056D2]', 'bg-green-600');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-green-700');
+                
+                statusMsg.innerText = 'Đăng ký thành công! Đang chuyển đến Đăng nhập...';
+                statusMsg.classList.add('text-green-600', 'dark:text-green-400');
+                statusMsg.classList.remove('hidden');
+
+                // Chuyển hướng sang trang đăng nhập sau 1.5 giây
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 1500);
+
+            } else {
+                // Trả lại trạng thái nút ban đầu
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                
+                // Hiển thị lỗi từ server (VD: Email đã tồn tại)
+                statusMsg.innerText = result.message || 'Đăng ký thất bại, vui lòng thử lại.';
+                statusMsg.classList.add('text-red-500', 'dark:text-red-400');
+                statusMsg.classList.remove('hidden');
+            }
+        } catch (error) {
+            console.error(error);
+            
+            // Trả lại trạng thái nút
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+
+            statusMsg.innerText = "Lỗi kết nối tới Server Backend!";
+            statusMsg.classList.add('text-red-500', 'dark:text-red-400');
+            statusMsg.classList.remove('hidden');
+        }
+    });
+  </script>
+
+</body>
+</html>
