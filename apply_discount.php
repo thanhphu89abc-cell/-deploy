@@ -61,35 +61,69 @@ try {
     $discount_rate = floatval($db_discount_rate);
     $stmt->close();
 
-    $stmt = $conn->prepare("SELECT o.id, c.price as original_price FROM orders o JOIN courses c ON o.course_name = c.id WHERE o.id = ? AND o.user_id = ?");
-    $stmt->bind_param("ii", $order_id, $user_id);
-    $stmt->execute();
-    $db_order_id = $db_original_price = null;
-    $stmt->bind_result($db_order_id, $db_original_price);
-    
-    if (!$stmt->fetch()) {
+    $is_cart = false;
+    $order_ids = [];
+    if (strpos($order_id, 'CART_') === 0) {
+        $is_cart = true;
+        $ids_str = str_replace("CART_", "", $order_id);
+        $order_ids = array_filter(explode("_", $ids_str));
+    } else {
+        $order_ids = [$order_id];
+    }
+
+    $total_new_price = 0;
+    $total_original_price = 0;
+    $has_valid_order = false;
+
+    foreach ($order_ids as $oid) {
+        $oid_int = intval($oid);
+        $stmt = $conn->prepare("SELECT id, course_name FROM orders WHERE id = ? AND user_id = ?");
+        $stmt->bind_param("ii", $oid_int, $user_id);
+        $stmt->execute();
+        $db_order_id = $db_course_name = null;
+        $stmt->bind_result($db_order_id, $db_course_name);
+        
+        if ($stmt->fetch()) {
+            $has_valid_order = true;
+            $stmt->close();
+
+            $stmt = $conn->prepare("SELECT price FROM courses WHERE id = ?");
+            $stmt->bind_param("s", $db_course_name);
+            $stmt->execute();
+            $db_original_price = null;
+            $stmt->bind_result($db_original_price);
+            $stmt->fetch();
+            $original_price = intval($db_original_price);
+            $stmt->close();
+
+            $new_price = intval($original_price * (1 - $discount_rate));
+            
+            $update_stmt = $conn->prepare("UPDATE orders SET price = ? WHERE id = ?");
+            $update_stmt->bind_param("ii", $new_price, $oid_int);
+            $update_stmt->execute();
+            $update_stmt->close();
+
+            $total_original_price += $original_price;
+            $total_new_price += $new_price;
+        } else {
+            $stmt->close();
+        }
+    }
+
+    if (!$has_valid_order) {
         http_response_code(404);
         echo json_encode(["message" => "Đơn hàng không hợp lệ!"]);
         exit();
     }
-    $original_price = intval($db_original_price);
-    $stmt->close();
 
-    $new_price = intval($original_price * (1 - $discount_rate));
-    
-    $update_stmt = $conn->prepare("UPDATE orders SET price = ? WHERE id = ?");
-    $update_stmt->bind_param("ii", $new_price, $order_id);
-    $update_stmt->execute();
-    $update_stmt->close();
-
-    $memo = "ATTT " . $order_id;
+    $memo = "ATTT " . ($is_cart ? "CART" . $user_id : $order_id);
     $account_name = "HOC VIEN COURSERA ATTT";
-    $qr_url = "https://api.vietqr.io/image/MB-0999999999-qr_only.png?amount={$new_price}&addInfo=" . urlencode($memo) . "&accountName=" . urlencode($account_name);
+    $qr_url = "https://api.vietqr.io/image/MB-0999999999-qr_only.png?amount={$total_new_price}&addInfo=" . urlencode($memo) . "&accountName=" . urlencode($account_name);
 
     echo json_encode([
         "message" => "Áp dụng thành công! Đã giảm " . ($discount_rate * 100) . "%",
-        "new_price" => $new_price,
-        "original_price" => $original_price,
+        "new_price" => $total_new_price,
+        "original_price" => $total_original_price,
         "qr_url" => $qr_url
     ]);
 } catch (Exception $e) {

@@ -15,16 +15,16 @@
 
   <div class="min-h-screen flex">
     <!-- Sidebar -->
-    <nav class="w-64 bg-white dark:bg-[#0B0F19] border-r border-gray-200 dark:border-slate-800 p-4 flex flex-col shrink-0">
-      <h1 class="text-2xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 mb-8">coursera</h1>
-      <ul id="admin-nav" class="space-y-2 text-sm font-bold text-gray-600 dark:text-gray-400">
+    <nav class="w-64 h-screen sticky top-0 bg-white dark:bg-[#0B0F19] border-r border-gray-200 dark:border-slate-800 p-4 flex flex-col shrink-0">
+      <h1 class="text-2xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 mb-8 shrink-0">coursera</h1>
+      <ul id="admin-nav" class="space-y-2 text-sm font-bold text-gray-600 dark:text-gray-400 flex-1 overflow-y-auto pr-2 scrollbar-thin">
         <li id="nav-item-dashboard"><a href="#" onclick="switchAdminTab('dashboard')" data-tab="dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/40 text-[#0056D2] dark:text-blue-400"><i class="fa-solid fa-chart-column w-5 text-center"></i> Thống kê Doanh thu</a></li>
         <li id="nav-item-orders"><a href="#" onclick="switchAdminTab('orders')" data-tab="orders" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-file-signature w-5 text-center"></i> Quản lý Ghi danh</a></li>
         <li id="nav-item-users"><a href="#" onclick="switchAdminTab('users')" data-tab="users" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-users w-5 text-center"></i> Quản lý Học viên</a></li>
         <li id="nav-item-courses"><a href="#" onclick="switchAdminTab('courses')" data-tab="courses" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-book w-5 text-center"></i> Quản lý Khóa học</a></li>
         <li id="nav-item-discounts"><a href="#" onclick="switchAdminTab('discounts')" data-tab="discounts" class="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800"><i class="fa-solid fa-ticket w-5 text-center"></i> Quản lý Khuyến mãi</a></li>
       </ul>
-      <div class="mt-auto space-y-2">
+      <div class="mt-auto space-y-2 shrink-0 pt-4 border-t border-gray-100 dark:border-slate-800">
         <button onclick="toggleAdminTheme()" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 text-sm font-bold text-gray-600 dark:text-gray-400 text-left transition">
           <i class="fa-solid fa-moon dark:hidden w-5 text-center"></i>
           <i class="fa-solid fa-sun hidden dark:inline-block w-5 text-center"></i>
@@ -49,14 +49,17 @@
       <div id="view-orders" class="hidden">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-black text-gray-900 dark:text-white">Quản lý Ghi danh</h2>
-            <button onclick="exportOrdersToCSV()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-file-csv"></i> Xuất CSV</button>
+            <div class="flex items-center gap-2">
+                <button onclick="deleteSelectedOrders()" id="btn-delete-orders" class="hidden px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors items-center gap-2 shadow-sm"><i class="fa-solid fa-trash-can"></i> Xóa đã chọn</button>
+                <button onclick="exportOrdersToCSV()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-file-csv"></i> Xuất CSV</button>
+            </div>
         </div>
         <div class="flex flex-col md:flex-row gap-4 mb-6">
           <div class="flex-1 relative">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <i class="fa-solid fa-magnifying-glass text-gray-400"></i>
             </div>
-            <input type="text" id="admin-search-input" placeholder="Tìm kiếm theo tên, email hoặc mã ghi danh (#ID)..." class="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#0B0F19] border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] outline-none text-sm text-gray-900 dark:text-white transition-all" onkeyup="renderOrders()">
+            <input type="text" id="admin-search-input" placeholder="Tìm kiếm theo tên, email hoặc mã ghi danh (#ID)..." class="w-full pl-10 pr-4 py-2 bg-white dark:bg-[#0B0F19] border border-gray-200 dark:border-slate-800 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] outline-none text-sm text-gray-900 dark:text-white transition-all" onkeyup="debouncedRenderOrders()">
           </div>
           <div class="flex items-center gap-2">
             <input type="date" id="admin-date-from" onchange="renderOrders()" class="px-3 py-2 text-sm font-bold bg-white dark:bg-[#0B0F19] border border-gray-200 dark:border-slate-800 rounded-xl outline-none text-gray-800 dark:text-white cursor-pointer focus:ring-2 focus:ring-[#0056D2]/20 transition-all" title="Từ ngày">
@@ -75,6 +78,7 @@
             <table class="w-full text-sm">
               <thead class="bg-gray-50 dark:bg-slate-900 text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">
                 <tr>
+                  <th class="p-4 text-left w-10"><input type="checkbox" id="selectAllOrders" onchange="toggleSelectAll('orders')" class="rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600"></th>
                   <th class="p-4 text-left">ID Ghi danh</th>
                   <th class="p-4 text-left">Học viên</th>
                   <th class="p-4 text-left">Khóa học</th>
@@ -94,6 +98,7 @@
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-black text-gray-900 dark:text-white">Quản lý Học viên</h2>
             <div class="flex items-center gap-2">
+              <button onclick="deleteSelectedUsers()" id="btn-delete-users" class="hidden px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors items-center gap-2 shadow-sm"><i class="fa-solid fa-trash-can"></i> Xóa đã chọn</button>
               <button onclick="exportUsersToCSV()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-file-csv"></i> Xuất CSV</button>
               <button onclick="openUserModal()" class="px-4 py-2 text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-plus"></i> Thêm học viên</button>
             </div>
@@ -103,6 +108,7 @@
               <table class="w-full text-sm">
                 <thead class="bg-gray-50 dark:bg-slate-900 text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">
                   <tr>
+                  <th class="p-4 text-left w-10"><input type="checkbox" id="selectAllUsers" onchange="toggleSelectAll('users')" class="rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600"></th>
                     <th class="p-4 text-left">ID</th>
                     <th class="p-4 text-left">Họ và tên</th>
                     <th class="p-4 text-left">Email</th>
@@ -121,7 +127,10 @@
       <div id="view-courses" class="hidden">
         <div class="flex items-center justify-between mb-6">
           <h2 class="text-2xl font-black text-gray-900 dark:text-white">Quản lý Nội dung Khóa học</h2>
-          <button onclick="openAddCourseModal()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-plus"></i> Thêm khóa học</button>
+          <div class="flex items-center gap-2">
+            <button onclick="deleteSelectedCourses()" id="btn-delete-courses" class="hidden px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors items-center gap-2 shadow-sm"><i class="fa-solid fa-trash-can"></i> Xóa đã chọn</button>
+            <button onclick="openAddCourseModal()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-plus"></i> Thêm khóa học</button>
+          </div>
         </div>
         <div id="admin-courses-container" class="space-y-6">
           <!-- Nội dung phân nhánh: Khóa học > Tuần > Bài học sẽ được render tại đây bằng JS -->
@@ -132,13 +141,17 @@
       <div id="view-discounts" class="hidden">
         <div class="flex items-center justify-between mb-6">
             <h2 class="text-2xl font-black text-gray-900 dark:text-white">Quản lý Khuyến mãi</h2>
-            <button onclick="openDiscountModal()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-plus"></i> Tạo mã mới</button>
+            <div class="flex items-center gap-2">
+                <button onclick="deleteSelectedDiscounts()" id="btn-delete-discounts" class="hidden px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors items-center gap-2 shadow-sm"><i class="fa-solid fa-trash-can"></i> Xóa đã chọn</button>
+                <button onclick="openDiscountModal()" class="px-4 py-2 text-xs font-bold bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors flex items-center gap-2 shadow-sm"><i class="fa-solid fa-plus"></i> Tạo mã mới</button>
+            </div>
         </div>
         <div class="bg-white dark:bg-[#0B0F19] rounded-2xl border border-gray-200 dark:border-slate-800 overflow-hidden">
             <div class="overflow-x-auto">
               <table class="w-full text-sm">
                 <thead class="bg-gray-50 dark:bg-slate-900 text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">
                   <tr>
+                  <th class="p-4 text-left w-10"><input type="checkbox" id="selectAllDiscounts" onchange="toggleSelectAll('discounts')" class="rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600"></th>
                     <th class="p-4 text-left">Mã giảm giá</th>
                     <th class="p-4 text-center">Mức giảm (%)</th>
                     <th class="p-4 text-center">Trạng thái</th>
@@ -288,8 +301,13 @@
             </div>
             
             <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1">Mã Video YouTube (ID)</label>
-                <input id="edit-lesson-video" type="text" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white font-mono" placeholder="Ví dụ: dQw4w9WgXcQ">
+                <label class="block text-xs font-bold text-gray-500 mb-1">Mã Video YouTube (ID) hoặc Link MP4</label>
+                <div class="flex gap-2">
+                    <input id="edit-lesson-video" type="text" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white font-mono" placeholder="Ví dụ: dQw4w9WgXcQ hoặc tải lên tệp .mp4">
+                    <label for="lesson-video-upload" class="cursor-pointer bg-gray-200 dark:bg-slate-700 hover:bg-gray-300 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl text-sm font-bold flex items-center justify-center transition-colors shadow-sm"><i class="fa-solid fa-upload"></i></label>
+                    <input type="file" id="lesson-video-upload" accept="video/mp4,video/webm" class="hidden" onchange="handleLessonVideoUpload(event)">
+                </div>
+                <div id="lesson-video-upload-status" class="text-xs font-bold text-blue-500 hidden mt-1"><i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải lên...</div>
             </div>
 
             <div>
@@ -356,9 +374,78 @@
     </div>
   </div>
 
-  <!-- Toast Container -->
-  <div id="toast-container" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+  <!-- Add Week Modal -->
+  <div id="add-week-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm mx-4 rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+            <h3 class="font-black text-lg text-gray-900 dark:text-white">Thêm Tuần Học</h3>
+            <button onclick="closeAddWeekModal()" class="text-gray-400 hover:text-gray-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="add-week-form" onsubmit="handleAddWeekSubmit(event)" class="space-y-4">
+            <input type="hidden" id="add-week-course-id">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tuần số (Thứ tự)</label>
+                <input id="add-week-number" type="number" min="1" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white" required>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tiêu đề tuần học</label>
+                <input id="add-week-title" type="text" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white" required>
+            </div>
+            <button type="submit" id="add-week-submit-btn" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm mt-2">Thêm Tuần Học</button>
+        </form>
+    </div>
+  </div>
 
-  <script src="admin.js"></script>
+  <!-- Edit Week Modal -->
+  <div id="edit-week-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm mx-4 rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+            <h3 class="font-black text-lg text-gray-900 dark:text-white">Chỉnh sửa Tuần Học</h3>
+            <button onclick="closeEditWeekModal()" class="text-gray-400 hover:text-gray-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="edit-week-form" onsubmit="handleEditWeekSubmit(event)" class="space-y-4">
+            <input type="hidden" id="edit-week-id">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tuần số (Thứ tự)</label>
+                <input id="edit-week-number" type="number" min="1" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white" required>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tiêu đề tuần học</label>
+                <input id="edit-week-title" type="text" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white" required>
+            </div>
+            <button type="submit" id="edit-week-submit-btn" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm mt-2">Cập nhật Tuần Học</button>
+        </form>
+    </div>
+  </div>
+
+  <!-- Add Lesson Modal -->
+  <div id="add-lesson-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center hidden">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md mx-4 rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl space-y-5">
+        <div class="flex items-center justify-between border-b border-gray-200 dark:border-slate-800 pb-3">
+            <h3 class="font-black text-lg text-gray-900 dark:text-white">Thêm Bài Học Mới</h3>
+            <button onclick="closeAddLessonModal()" class="text-gray-400 hover:text-gray-600 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="add-lesson-form" onsubmit="handleAddLessonSubmit(event)" class="space-y-4">
+            <input type="hidden" id="add-lesson-week-id">
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Tiêu đề bài học</label>
+                <input id="add-lesson-title" type="text" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white" required>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-gray-500 mb-1">Loại bài học</label>
+                <select id="add-lesson-type" class="w-full px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl outline-none text-sm text-gray-900 dark:text-white cursor-pointer">
+                    <option value="video">Video / Lý thuyết</option>
+                    <option value="lab">Thực hành Lab / CTF</option>
+                </select>
+            </div>
+            <button type="submit" id="add-lesson-submit-btn" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors shadow-sm mt-2">Thêm Bài Học</button>
+        </form>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-20 right-5 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+
+  <script src="admin.js?v=1002"></script>
 </body>
 </html>

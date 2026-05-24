@@ -4,6 +4,18 @@ let revenueChartInstance = null;
 let adminCourses = [];
 let allDiscounts = [];
 
+function debounce(func, delay = 1500) {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            func.apply(this, args);
+        }, delay);
+    };
+}
+
+const debouncedRenderOrders = debounce(renderOrders, 300);
+
 function showToast(message, type = 'success') {
     const container = document.getElementById('toast-container');
     if (!container) return;
@@ -26,23 +38,87 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
+function showConfirmModal(message, onConfirm) {
+    const existing = document.getElementById('custom-confirm-modal');
+    if (existing) existing.remove();
+
+    const modalHTML = `
+        <div id="custom-confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[10000] flex items-center justify-center animate-fade">
+            <div class="bg-white dark:bg-slate-900 w-full max-w-sm mx-4 rounded-3xl p-6 border border-gray-100 dark:border-slate-800 shadow-2xl text-center transform transition-transform scale-95 duration-300" id="custom-confirm-content">
+                <div class="w-16 h-16 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white dark:border-slate-900 shadow-sm text-3xl">
+                    <i class="fa-solid fa-circle-question"></i>
+                </div>
+                <h3 class="text-xl font-black text-gray-900 dark:text-white mb-2">Xác nhận</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 font-medium">${message}</p>
+                <div class="flex gap-3">
+                    <button id="btn-confirm-cancel" class="flex-1 py-2.5 rounded-xl font-bold text-gray-600 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors">Hủy</button>
+                    <button id="btn-confirm-ok" class="flex-1 py-2.5 rounded-xl font-bold text-white bg-[#0056D2] hover:bg-blue-700 transition-colors shadow-md">Đồng ý</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const modal = document.getElementById('custom-confirm-modal');
+    const content = document.getElementById('custom-confirm-content');
+    
+    setTimeout(() => content.classList.replace('scale-95', 'scale-100'), 10);
+
+    const close = () => {
+        modal.classList.add('opacity-0');
+        content.classList.replace('scale-100', 'scale-95');
+        setTimeout(() => modal.remove(), 300);
+    };
+
+    document.getElementById('btn-confirm-cancel').onclick = close;
+    document.getElementById('btn-confirm-ok').onclick = () => {
+        close();
+        if (onConfirm) onConfirm();
+    };
+}
+
+function toggleSelectAll(type) {
+    const selectAllElement = document.getElementById(`selectAll${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    if (!selectAllElement) return;
+    const isChecked = selectAllElement.checked;
+    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
+    checkboxes.forEach(cb => cb.checked = isChecked);
+    checkSelected(type);
+}
+
+function checkSelected(type) {
+    const checkboxes = document.querySelectorAll(`.${type}-checkbox`);
+    const btn = document.getElementById(`btn-delete-${type}`);
+    if (!btn) return;
+    const anyChecked = Array.from(checkboxes).some(cb => cb.checked);
+    
+    if (anyChecked) { btn.classList.remove('hidden'); btn.classList.add('flex'); }
+    else { btn.classList.add('hidden'); btn.classList.remove('flex'); }
+    
+    const selectAllCb = document.getElementById(`selectAll${type.charAt(0).toUpperCase() + type.slice(1)}`);
+    if (selectAllCb) {
+        const allChecked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
+        selectAllCb.checked = allChecked;
+    }
+}
+
 async function loadOrders() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     if (!token) {
-      alert("Vui lòng đăng nhập với tài khoản Admin.");
-      window.location.href = 'login.html';
+      showToast("Vui lòng đăng nhập với tài khoản Admin.", "error");
+      setTimeout(() => window.location.href = 'login.html', 1500);
       return;
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/admin/orders', {
+      const response = await fetch('admin_api.php/orders', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        alert(errorData.message || 'Không thể tải dữ liệu đơn hàng.');
-        if(response.status === 401 || response.status === 403) window.location.href = 'login.html';
+        showToast(errorData.message || 'Không thể tải dữ liệu đơn hàng.', 'error');
+        if(response.status === 401 || response.status === 403) setTimeout(() => window.location.href = 'login.html', 1500);
         return;
       }
 
@@ -52,11 +128,15 @@ async function loadOrders() {
 
     } catch (error) {
       console.error("Lỗi tải đơn hàng:", error);
-      alert("Lỗi kết nối tới máy chủ.");
+      showToast("Lỗi kết nối tới máy chủ.", "error");
     }
 }
 
 function renderOrders() {
+    document.getElementById('selectAllOrders') && (document.getElementById('selectAllOrders').checked = false);
+    document.getElementById('btn-delete-orders') && document.getElementById('btn-delete-orders').classList.add('hidden');
+    document.getElementById('btn-delete-orders') && document.getElementById('btn-delete-orders').classList.remove('flex');
+
     const tableBody = document.getElementById('orders-table-body');
     const searchInput = document.getElementById('admin-search-input');
     const statusFilter = document.getElementById('admin-status-filter');
@@ -72,10 +152,12 @@ function renderOrders() {
         const matchesSearch = order.user_fullname.toLowerCase().includes(searchTerm) || 
                               order.user_email.toLowerCase().includes(searchTerm) ||
                               `#${order.id}`.includes(searchTerm);
+        
+        const step = parseInt(order.current_step);
         let matchesStatus = true;
-        if (filterValue === 'pending') matchesStatus = order.current_step === 1;
-        if (filterValue === 'completed') matchesStatus = order.current_step === 3;
-        if (filterValue === 'cancelled') matchesStatus = order.current_step === 4;
+        if (filterValue === 'pending') matchesStatus = step === 1;
+        if (filterValue === 'completed') matchesStatus = step === 3;
+        if (filterValue === 'cancelled') matchesStatus = step === 4;
         
         let matchesDate = true;
         if (dateFrom || dateTo) {
@@ -98,22 +180,24 @@ function renderOrders() {
     tableBody.innerHTML = '';
 
     if (filteredOrders.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-gray-500">Không tìm thấy đơn hàng nào phù hợp.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-gray-500">Không tìm thấy đơn hàng nào phù hợp.</td></tr>`;
         return;
     }
 
     filteredOrders.forEach(order => {
         let statusBadge = '';
-        if (order.current_step === 1) {
+        const step = parseInt(order.current_step);
+        if (step === 1) {
           statusBadge = `<span class="px-2 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400">Chờ duyệt</span>`;
-        } else if (order.current_step === 3) {
+        } else if (step === 3) {
           statusBadge = `<span class="px-2 py-1 text-xs font-bold rounded-full bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã duyệt</span>`;
-        } else if (order.current_step === 4) {
+        } else if (step === 4) {
           statusBadge = `<span class="px-2 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400">Đã hủy</span>`;
         }
 
         const row = `
           <tr class="hover:bg-gray-50/50 dark:hover:bg-slate-800/20">
+            <td class="p-4"><input type="checkbox" value="${order.id}" class="orders-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('orders')"></td>
             <td class="p-4 font-mono font-bold text-gray-500">#${order.id}</td>
             <td class="p-4">
               <p class="font-bold text-gray-800 dark:text-gray-200">${order.user_fullname}</p>
@@ -123,8 +207,8 @@ function renderOrders() {
             <td class="p-4 text-center">${statusBadge}</td>
             <td class="p-4 text-right font-bold text-[#0056D2] dark:text-blue-400">${Number(order.price).toLocaleString('vi-VN')} đ</td>
             <td class="p-4 text-center space-x-1">
-              ${order.current_step === 1 ? `<button onclick="approveOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">Duyệt đơn</button>` : ''}
-              ${order.current_step === 1 ? `<button onclick="cancelOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors">Hủy đơn</button>` : ''}
+              ${step === 1 ? `<button onclick="approveOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">Duyệt đơn</button>` : ''}
+              ${step === 1 ? `<button onclick="cancelOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors">Hủy đơn</button>` : ''}
               <button onclick="downloadInvoice(${order.id})" class="px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors" title="Biên lai ghi danh"><i class="fa-solid fa-file-pdf"></i></button>
               <button onclick="deleteOrder(${order.id})" class="px-3 py-1.5 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Xóa ghi danh"><i class="fa-solid fa-trash-can"></i></button>
             </td>
@@ -147,9 +231,10 @@ function exportOrdersToCSV() {
     // Thêm dữ liệu từng đơn hàng vào
     allOrders.forEach(order => {
         let statusStr = "Không xác định";
-        if (order.current_step === 1) statusStr = "Chờ duyệt";
-        else if (order.current_step === 3) statusStr = "Đã duyệt";
-        else if (order.current_step === 4) statusStr = "Đã hủy";
+        const step = parseInt(order.current_step);
+        if (step === 1) statusStr = "Chờ duyệt";
+        else if (step === 3) statusStr = "Đã duyệt";
+        else if (step === 4) statusStr = "Đã hủy";
         const row = [
             order.id,
             `"${order.user_fullname}"`, // Bọc trong ngoặc kép để an toàn với dấu phẩy
@@ -173,16 +258,13 @@ function exportOrdersToCSV() {
 }
 
 async function approveOrder(orderId, button) {
-    if (!confirm(`Bạn có chắc chắn muốn duyệt đơn hàng #${orderId} không?`)) {
-        return;
-    }
-
+    showConfirmModal(`Bạn có chắc chắn muốn duyệt đơn hàng #${orderId} không?`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     button.disabled = true;
     button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/approve-order/${orderId}`, {
+        const response = await fetch(`admin_api.php/approve-order/${orderId}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -191,8 +273,9 @@ async function approveOrder(orderId, button) {
         showToast(data.message, response.ok ? 'success' : 'error');
 
         if (response.ok) {
-            button.parentElement.innerHTML = '<span class="text-green-500 font-bold text-xs"><i class="fa-solid fa-check"></i> Đã xử lý</span>';
-            loadOrders(); 
+            // Ẩn lập tức các nút và thay thế bằng text
+            button.closest('.action-buttons-wrapper').innerHTML = '<span class="text-red-500 font-bold text-xs bg-red-50 px-2 py-1.5 rounded-md border border-red-200"><i class="fa-solid fa-xmark"></i> Đã hủy</span>';
+            setTimeout(() => loadOrders(), 1000); 
         } else {
             button.disabled = false;
             button.innerText = 'Duyệt đơn';
@@ -202,19 +285,17 @@ async function approveOrder(orderId, button) {
         button.disabled = false;
         button.innerText = 'Duyệt đơn';
     }
+    });
 }
 
 async function cancelOrder(orderId, button) {
-    if (!confirm(`Bạn có chắc chắn muốn HỦY đơn hàng #${orderId} không?`)) {
-        return;
-    }
-
+    showConfirmModal(`Bạn có chắc chắn muốn HỦY đơn hàng #${orderId} không?`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     button.disabled = true;
     button.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i>`;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/cancel-order/${orderId}`, {
+        const response = await fetch(`admin_api.php/cancel-order/${orderId}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -223,8 +304,9 @@ async function cancelOrder(orderId, button) {
         showToast(data.message, response.ok ? 'success' : 'error');
 
         if (response.ok) {
-            button.parentElement.innerHTML = '<span class="text-green-500 font-bold text-xs"><i class="fa-solid fa-check"></i> Đã xử lý</span>';
-            loadOrders(); 
+            // Ẩn lập tức các nút và thay thế bằng text
+            button.closest('.action-buttons-wrapper').innerHTML = '<span class="text-green-500 font-bold text-xs bg-green-50 px-2 py-1.5 rounded-md border border-green-200"><i class="fa-solid fa-check"></i> Đã duyệt</span>';
+            setTimeout(() => loadOrders(), 1000); 
         } else {
             button.disabled = false;
             button.innerText = 'Hủy đơn';
@@ -234,25 +316,24 @@ async function cancelOrder(orderId, button) {
         button.disabled = false;
         button.innerText = 'Hủy đơn';
     }
+    });
 }
 
 function downloadInvoice(orderId) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     if (!token) {
-        alert("Vui lòng đăng nhập lại!");
+        showToast("Vui lòng đăng nhập lại!", "error");
         return;
     }
-    const url = `http://127.0.0.1:5000/api/admin/invoice/${orderId}?token=${token}`;
+    const url = `admin_api.php/invoice/${orderId}?token=${token}`;
     window.open(url, '_blank');
 }
 
 async function deleteOrder(orderId) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa đơn hàng #${orderId}? Hành động này không thể hoàn tác.`)) {
-        return;
-    }
+    showConfirmModal(`Bạn có chắc chắn muốn xóa đơn hàng #${orderId}? Hành động này không thể hoàn tác.`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/orders/${orderId}`, {
+        const response = await fetch(`admin_api.php/orders/${orderId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -264,12 +345,38 @@ async function deleteOrder(orderId) {
     } catch (error) {
         showToast("Lỗi kết nối khi xóa đơn hàng.", "error");
     }
+    });
+}
+
+async function deleteSelectedOrders() {
+    const checkboxes = document.querySelectorAll('.orders-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    if (ids.length === 0) return;
+
+    showConfirmModal(`Bạn có chắc chắn muốn xóa ${ids.length} đơn hàng đã chọn? Hành động này không thể hoàn tác.`, async () => {
+        const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+        const btn = document.getElementById('btn-delete-orders');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xóa...`;
+        btn.disabled = true;
+
+        let successCount = 0;
+        for (const id of ids) {
+            try {
+                const res = await fetch(`admin_api.php/orders/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) successCount++;
+            } catch (e) {}
+        }
+        
+        showToast(`Đã xóa thành công ${successCount}/${ids.length} đơn hàng.`, 'success');
+        loadOrders();
+    });
 }
 
 async function loadUsers() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/users', {
+        const response = await fetch('admin_api.php/users', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -281,6 +388,10 @@ async function loadUsers() {
 }
 
 function renderUsers() {
+    document.getElementById('selectAllUsers') && (document.getElementById('selectAllUsers').checked = false);
+    document.getElementById('btn-delete-users') && document.getElementById('btn-delete-users').classList.add('hidden');
+    document.getElementById('btn-delete-users') && document.getElementById('btn-delete-users').classList.remove('flex');
+
     const tableBody = document.getElementById('users-table-body');
     tableBody.innerHTML = '';
     allUsers.forEach(user => {
@@ -290,6 +401,7 @@ function renderUsers() {
 
         const row = `
             <tr>
+                <td class="p-4"><input type="checkbox" value="${user.id}" class="users-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('users')"></td>
                 <td class="p-4 font-bold">#${user.id}</td>
                 <td class="p-4 font-bold text-gray-800 dark:text-gray-200">${user.fullname}</td>
                 <td class="p-4 text-gray-600 dark:text-gray-300">${user.email}</td>
@@ -345,7 +457,7 @@ function openUserModal(userId = null) {
 
     if (userId) {
         // Chế độ sửa
-        const user = allUsers.find(u => u.id === userId);
+        const user = allUsers.find(u => String(u.id) === String(userId));
         if (!user) return;
         title.innerText = "Chỉnh sửa thông tin học viên";
         document.getElementById('user-id-input').value = user.id;
@@ -377,7 +489,7 @@ async function handleUserSubmit(event) {
     const password = document.getElementById('user-password-input').value;
     const role = document.getElementById('user-role-input').value;
 
-    const url = userId ? `/api/admin/users/${userId}` : '/api/admin/users';
+    const url = userId ? `admin_api.php/users/${userId}` : 'admin_api.php/users';
     const method = userId ? 'PUT' : 'POST';
 
     const body = { fullname, email, role };
@@ -388,7 +500,7 @@ async function handleUserSubmit(event) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000${url}`, {
+        const response = await fetch(url, {
             method: method,
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -405,12 +517,10 @@ async function handleUserSubmit(event) {
 }
 
 async function deleteUser(userId) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa người dùng #${userId}? Hành động này không thể hoàn tác.`)) {
-        return;
-    }
+    showConfirmModal(`Bạn có chắc chắn muốn xóa người dùng #${userId}? Hành động này không thể hoàn tác.`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/users/${userId}`, {
+        const response = await fetch(`admin_api.php/users/${userId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -422,6 +532,32 @@ async function deleteUser(userId) {
     } catch (error) {
         showToast("Lỗi kết nối khi xóa người dùng.", "error");
     }
+    });
+}
+
+async function deleteSelectedUsers() {
+    const checkboxes = document.querySelectorAll('.users-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    if (ids.length === 0) return;
+
+    showConfirmModal(`Bạn có chắc chắn muốn xóa ${ids.length} học viên đã chọn? Hành động này không thể hoàn tác.`, async () => {
+        const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+        const btn = document.getElementById('btn-delete-users');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xóa...`;
+        btn.disabled = true;
+
+        let successCount = 0;
+        for (const id of ids) {
+            try {
+                const res = await fetch(`admin_api.php/users/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) successCount++;
+            } catch (e) {}
+        }
+        
+        showToast(`Đã xóa thành công ${successCount}/${ids.length} học viên.`, 'success');
+        loadUsers();
+    });
 }
 
 function switchAdminTab(tabName) {
@@ -465,7 +601,7 @@ async function loadRevenueData() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     if (!token) return;
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/revenue', {
+        const response = await fetch('admin_api.php/revenue', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -530,7 +666,7 @@ function renderRevenueChart(revenueData) {
 async function loadAdminCourses() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/courses', {
+        const response = await fetch('admin_api.php/courses', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -543,15 +679,29 @@ async function loadAdminCourses() {
     }
 }
 
+function getCourseImage(iconUrl) {
+    if (iconUrl && typeof iconUrl === 'string' && iconUrl.trim() !== "" && iconUrl !== "null") return iconUrl;
+    return "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=200&q=80";
+}
+
 function renderAdminCourses() {
+    document.getElementById('btn-delete-courses') && document.getElementById('btn-delete-courses').classList.add('hidden');
+    document.getElementById('btn-delete-courses') && document.getElementById('btn-delete-courses').classList.remove('flex');
+
     const container = document.getElementById('admin-courses-container');
     if (!container) return;
     container.innerHTML = '';
 
     adminCourses.forEach(course => {
+        const imageUrl = getCourseImage(course.icon);
+
         let html = `<div class="bg-white dark:bg-[#0B0F19] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 mb-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-xl font-black text-[#0056D2] dark:text-blue-500">${course.title} <span class="text-xs font-semibold text-gray-500 ml-2">(${course.badge})</span></h3>
+                <div class="flex items-center gap-4">
+                    <input type="checkbox" value="${course.id}" class="courses-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('courses')">
+                    <div class="w-14 h-14 rounded-xl bg-cover bg-center border border-gray-200 dark:border-slate-700 shrink-0 shadow-sm" style="background-image: url('${imageUrl}')"></div>
+                    <h3 class="text-xl font-black text-[#0056D2] dark:text-blue-500">${course.title} <span class="text-xs font-semibold text-gray-500 ml-2">(${course.badge})</span></h3>
+                </div>
                 <div class="space-x-2 flex items-center">
                     <button onclick="openAddWeekModal('${course.id}')" class="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-plus mr-1"></i> Thêm Tuần</button>
                     <button onclick="openCourseEditModal('${course.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa Khóa học</button>
@@ -566,6 +716,7 @@ function renderAdminCourses() {
                     <h4 class="font-bold text-gray-800 dark:text-gray-200 uppercase text-xs tracking-wider">Tuần ${week.week_number}: ${week.title}</h4>
                     <div class="space-x-1 flex items-center">
                         <button onclick="openAddLessonModal(${week.id})" class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 rounded-lg text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-1"></i> Bài học</button>
+                        <button onclick="openEditWeekModal('${course.id}', ${week.id})" class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 rounded-lg text-[10px] font-bold transition-colors" title="Sửa tuần học"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="deleteWeek(${week.id})" class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 rounded-lg text-[10px] font-bold transition-colors" title="Xóa tuần học"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
                 </div>
@@ -593,7 +744,7 @@ function renderAdminCourses() {
 }
 
 function openCourseEditModal(courseId) {
-    const course = adminCourses.find(c => c.id === courseId);
+    const course = adminCourses.find(c => String(c.id) === String(courseId));
     if (!course) return;
 
     document.getElementById('edit-course-id').value = course.id;
@@ -626,7 +777,7 @@ async function handleCourseSubmit(event) {
     btn.disabled = true;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/courses/${courseId}`, {
+        const response = await fetch(`admin_api.php/courses/${courseId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -660,7 +811,7 @@ async function handleThumbnailUpload(event) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/upload', {
+        const response = await fetch('admin_api.php/upload', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -710,7 +861,7 @@ async function handleAddCourseSubmit(event) {
     btn.disabled = true;
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/courses', {
+        const response = await fetch('admin_api.php/courses', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -744,7 +895,7 @@ async function handleAddThumbnailUpload(event) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
 
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/upload', {
+        const response = await fetch('admin_api.php/upload', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
@@ -767,12 +918,10 @@ async function handleAddThumbnailUpload(event) {
 }
 
 async function deleteCourse(courseId) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa khóa học '${courseId}'? Hành động này sẽ xóa khóa học khỏi hệ thống.`)) {
-        return;
-    }
+    showConfirmModal(`Bạn có chắc chắn muốn xóa khóa học '${courseId}'? Hành động này sẽ xóa khóa học khỏi hệ thống.`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/courses/${courseId}`, {
+        const response = await fetch(`admin_api.php/courses/${courseId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -784,12 +933,40 @@ async function deleteCourse(courseId) {
     } catch (error) {
         showToast("Lỗi kết nối khi xóa khóa học.", "error");
     }
+    });
+}
+
+async function deleteSelectedCourses() {
+    const checkboxes = document.querySelectorAll('.courses-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    if (ids.length === 0) return;
+
+    showConfirmModal(`Bạn có chắc chắn muốn xóa ${ids.length} khóa học đã chọn? Hành động này không thể hoàn tác.`, async () => {
+        const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+        const btn = document.getElementById('btn-delete-courses');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xóa...`;
+        btn.disabled = true;
+
+        let successCount = 0;
+        for (const id of ids) {
+            try {
+                const res = await fetch(`admin_api.php/courses/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) successCount++;
+            } catch (e) {}
+        }
+        
+        showToast(`Đã xóa thành công ${successCount}/${ids.length} khóa học.`, 'success');
+        loadAdminCourses();
+    });
 }
 
 function openLessonEditModal(courseId, weekId, lessonId) {
-    const course = adminCourses.find(c => c.id === courseId);
-    const week = course.weeks.find(w => w.id === weekId);
-    const lesson = week.items.find(l => l.id === lessonId);
+    const course = adminCourses.find(c => String(c.id) === String(courseId));
+    if (!course) return;
+    const week = course.weeks.find(w => String(w.id) === String(weekId));
+    if (!week) return;
+    const lesson = week.items.find(l => String(l.id) === String(lessonId));
     if (!lesson) return;
 
     document.getElementById('edit-lesson-id').value = lesson.id;
@@ -832,7 +1009,7 @@ async function handleLessonSubmit(event) {
     btn.disabled = true;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/lessons/${lessonId}`, {
+        const response = await fetch(`admin_api.php/lessons/${lessonId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -849,6 +1026,43 @@ async function handleLessonSubmit(event) {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
+}
+
+async function handleLessonVideoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const statusEl = document.getElementById('lesson-video-upload-status');
+    statusEl.classList.remove('hidden');
+    statusEl.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang tải video lên server...`;
+    statusEl.className = "text-xs font-bold text-blue-500 mt-1";
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+
+    try {
+        const response = await fetch('admin_api.php/upload', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const data = await response.json();
+        if (response.ok) {
+            document.getElementById('edit-lesson-video').value = data.url;
+            statusEl.innerHTML = `<i class="fa-solid fa-check"></i> Tải video thành công!`;
+            statusEl.className = "text-xs font-bold text-green-500 mt-1";
+        } else {
+            statusEl.innerHTML = `<i class="fa-solid fa-times"></i> ${data.message || 'Lỗi tải video'}`;
+            statusEl.className = "text-xs font-bold text-red-500 mt-1";
+        }
+    } catch (error) {
+        statusEl.innerHTML = `<i class="fa-solid fa-times"></i> Lỗi kết nối máy chủ`;
+        statusEl.className = "text-xs font-bold text-red-500 mt-1";
+    }
+    
+    event.target.value = '';
 }
 
 function openAddWeekModal(courseId) {
@@ -877,7 +1091,7 @@ async function handleAddWeekSubmit(event) {
     btn.disabled = true;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/courses/${courseId}/weeks`, {
+        const response = await fetch(`admin_api.php/courses/${courseId}/weeks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -896,11 +1110,63 @@ async function handleAddWeekSubmit(event) {
     }
 }
 
+function openEditWeekModal(courseId, weekId) {
+    const course = adminCourses.find(c => String(c.id) === String(courseId));
+    if (!course) return;
+    const week = course.weeks.find(w => String(w.id) === String(weekId));
+    if (!week) return;
+
+    document.getElementById('edit-week-form').reset();
+    document.getElementById('edit-week-id').value = week.id;
+    document.getElementById('edit-week-number').value = week.week_number;
+    document.getElementById('edit-week-title').value = week.title;
+    document.getElementById('edit-week-modal').classList.remove('hidden');
+}
+
+function closeEditWeekModal() {
+    document.getElementById('edit-week-modal').classList.add('hidden');
+}
+
+async function handleEditWeekSubmit(event) {
+    event.preventDefault();
+    const weekId = document.getElementById('edit-week-id').value;
+    const btn = document.getElementById('edit-week-submit-btn');
+    
+    const body = {
+        week_number: parseInt(document.getElementById('edit-week-number').value) || 1,
+        title: document.getElementById('edit-week-title').value
+    };
+
+    const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang lưu...`;
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`admin_api.php/weeks/${weekId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        showToast(data.message, response.ok ? 'success' : 'error');
+        if (response.ok) {
+            closeEditWeekModal();
+            loadAdminCourses(); 
+        }
+    } catch (error) {
+        showToast("Lỗi kết nối khi cập nhật tuần học.", "error");
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
 async function deleteWeek(weekId) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa Tuần học này không?`)) return;
+    showConfirmModal(`Bạn có chắc chắn muốn xóa Tuần học này không?`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/weeks/${weekId}`, {
+        const response = await fetch(`admin_api.php/weeks/${weekId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -910,6 +1176,7 @@ async function deleteWeek(weekId) {
     } catch (error) {
         showToast("Lỗi kết nối khi xóa tuần học.", "error");
     }
+    });
 }
 
 function openAddLessonModal(weekId) {
@@ -938,7 +1205,7 @@ async function handleAddLessonSubmit(event) {
     btn.disabled = true;
 
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/weeks/${weekId}/lessons`, {
+        const response = await fetch(`admin_api.php/weeks/${weekId}/lessons`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify(body)
@@ -958,10 +1225,10 @@ async function handleAddLessonSubmit(event) {
 }
 
 async function deleteLesson(lessonId) {
-    if (!confirm(`Bạn có chắc chắn muốn xóa Bài học này không?`)) return;
+    showConfirmModal(`Bạn có chắc chắn muốn xóa Bài học này không?`, async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/lessons/${lessonId}`, {
+        const response = await fetch(`admin_api.php/lessons/${lessonId}`, {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -971,6 +1238,7 @@ async function deleteLesson(lessonId) {
     } catch (error) {
         showToast("Lỗi kết nối khi xóa bài học.", "error");
     }
+    });
 }
 
 // ========================================================
@@ -979,7 +1247,7 @@ async function deleteLesson(lessonId) {
 async function loadDiscounts() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/discounts', {
+        const response = await fetch('admin_api.php/discounts', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -991,6 +1259,10 @@ async function loadDiscounts() {
 }
 
 function renderDiscounts() {
+    document.getElementById('selectAllDiscounts') && (document.getElementById('selectAllDiscounts').checked = false);
+    document.getElementById('btn-delete-discounts') && document.getElementById('btn-delete-discounts').classList.add('hidden');
+    document.getElementById('btn-delete-discounts') && document.getElementById('btn-delete-discounts').classList.remove('flex');
+
     const tableBody = document.getElementById('discounts-table-body');
     tableBody.innerHTML = '';
     allDiscounts.forEach(d => {
@@ -1000,6 +1272,7 @@ function renderDiscounts() {
 
         tableBody.innerHTML += `
             <tr>
+                <td class="p-4"><input type="checkbox" value="${d.id}" class="discounts-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('discounts')"></td>
                 <td class="p-4 font-mono font-bold text-[#0056D2] dark:text-blue-400">${d.code}</td>
                 <td class="p-4 font-black text-center text-gray-800 dark:text-gray-200">${Math.round(d.discount_rate * 100)}%</td>
                 <td class="p-4 text-center">${statusBadge}</td>
@@ -1025,7 +1298,7 @@ async function handleDiscountSubmit(event) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     
     try {
-        const response = await fetch('http://127.0.0.1:5000/api/admin/discounts', {
+        const response = await fetch('admin_api.php/discounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
             body: JSON.stringify({ code, rate })
@@ -1037,18 +1310,44 @@ async function handleDiscountSubmit(event) {
 }
 
 async function deleteDiscount(id) {
-    if (!confirm("Bạn có chắc chắn muốn xóa mã giảm giá này?")) return;
+    showConfirmModal("Bạn có chắc chắn muốn xóa mã giảm giá này?", async () => {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/discounts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        const response = await fetch(`admin_api.php/discounts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
         if (response.ok) loadDiscounts();
     } catch (error) { showToast("Lỗi kết nối.", "error"); }
+    });
+}
+
+async function deleteSelectedDiscounts() {
+    const checkboxes = document.querySelectorAll('.discounts-checkbox:checked');
+    const ids = Array.from(checkboxes).map(cb => cb.value);
+    if (ids.length === 0) return;
+
+    showConfirmModal(`Bạn có chắc chắn muốn xóa ${ids.length} mã giảm giá đã chọn?`, async () => {
+        const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
+        const btn = document.getElementById('btn-delete-discounts');
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xóa...`;
+        btn.disabled = true;
+
+        let successCount = 0;
+        for (const id of ids) {
+            try {
+                const res = await fetch(`admin_api.php/discounts/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) successCount++;
+            } catch (e) {}
+        }
+        
+        showToast(`Đã xóa thành công ${successCount}/${ids.length} mã giảm giá.`, 'success');
+        loadDiscounts();
+    });
 }
 
 async function toggleDiscountStatus(id, isActive) {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch(`http://127.0.0.1:5000/api/admin/discounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ is_active: isActive }) });
+        const response = await fetch(`admin_api.php/discounts/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ is_active: isActive }) });
         if (response.ok) loadDiscounts();
     } catch (error) { showToast("Lỗi kết nối.", "error"); }
 }

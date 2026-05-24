@@ -182,9 +182,9 @@ $stmt->close();
  */
 $stmt_insert = $conn->prepare("
     INSERT INTO users (
-        username,
+        fullname,
         email,
-        password,
+        password_hash,
         role
     )
     VALUES (?, ?, ?, 'student')

@@ -1,21 +1,12 @@
 <?php
 ob_start();
 
-ini_set('display_errors', '0');
-ini_set('display_startup_errors', '0');
+use Firebase\JWT\JWT;
+
+// Bật báo lỗi để không bao giờ bị màn hình trắng
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
-
-header('Content-Type: application/json; charset=utf-8');
-
-set_exception_handler(function (Throwable $e) {
-    if (ob_get_level()) ob_clean();
-    http_response_code(500);
-    echo json_encode([
-        "status" => "error", 
-        "message" => "Lỗi ngoại lệ PHP: " . $e->getMessage()
-    ], JSON_UNESCAPED_UNICODE);
-    exit;
-});
 
 // Bắt các lỗi sập nguồn nặng nhất
 register_shutdown_function(function() {
@@ -33,14 +24,14 @@ register_shutdown_function(function() {
 
 require 'db_connect.php';
 
+header('Content-Type: application/json; charset=utf-8');
+
 // Kiểm tra thư viện JWT
 if (!file_exists('vendor/autoload.php')) {
-    if (ob_get_level()) ob_clean();
     http_response_code(500);
     die(json_encode(["status" => "error", "message" => "Thiếu thư viện JWT! Hãy mở Terminal gõ 'composer require firebase/php-jwt'"]));
 }
 require_once 'vendor/autoload.php';
-use Firebase\JWT\JWT;
 
 // Nhận dữ liệu từ form HTML
 $input = json_decode(file_get_contents('php://input'), true);
@@ -55,8 +46,11 @@ if (empty($email) || empty($password)) {
     exit();
 }
 
-// Gọi đúng cột username và password
-$stmt = $conn->prepare("SELECT id, email, username, role, password FROM users WHERE email = ?");
+// ----------------------------------------------------------------------
+// GỌI CHÍNH XÁC CỘT: fullname VÀ password_hash TỪ DATABASE CỦA BẠN
+$stmt = $conn->prepare("SELECT id, email, fullname, role, password_hash FROM users WHERE email = ?");
+// ----------------------------------------------------------------------
+
 if (!$stmt) {
     if (ob_get_level()) ob_clean();
     http_response_code(500);
@@ -65,17 +59,22 @@ if (!$stmt) {
 
 $stmt->bind_param("s", $email);
 $stmt->execute();
-$stmt->bind_result($db_id, $db_email, $db_username, $db_role, $db_password);
+$stmt->bind_result($db_id, $db_email, $db_fullname, $db_role, $db_password_hash);
 
 $response = [];
 if ($stmt->fetch()) {
-    // So sánh mật khẩu bằng chữ thường
-    if ($password === $db_password) {
+    // ----------------------------------------------------------------------
+    // CƠ CHẾ KIỂM TRA MẬT KHẨU "BẤT TỬ":
+    // Chấp nhận cả mật khẩu mã hóa (nếu đăng ký mới) HOẶC mật khẩu thường (nhập tay 123456)
+   // Thêm (string) vào trước biến để IDE hiểu chắc chắn đó là chuỗi
+if (password_verify($password, (string)$db_password_hash) || $password === (string)$db_password_hash) {
+    // ----------------------------------------------------------------------
+        
         $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
         $payload = [
             'user_id' => $db_id,
             'email' => $db_email,
-            'username' => $db_username,
+            'fullname' => $db_fullname, // Đã đổi về fullname
             'role' => $db_role,
             'exp' => time() + (24 * 60 * 60)
         ];
@@ -87,7 +86,7 @@ if ($stmt->fetch()) {
             "message" => "Đăng nhập thành công!",
             "token" => $jwt,
             "user" => [
-                "username" => $db_username,
+                "fullname" => $db_fullname, // Đã đổi về fullname
                 "email" => $db_email,
                 "role" => $db_role
             ]
@@ -105,5 +104,6 @@ $stmt->close();
 $conn->close();
 
 if (ob_get_level()) ob_clean();
-echo json_encode($response, JSON_UNESCAPED_UNICODE);
+echo json_encode($response);
 exit();
+?>

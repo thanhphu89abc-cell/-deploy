@@ -29,6 +29,7 @@
     margin: 0 !important;
     flex: 0 1 100% !important;
     max-width: 100% !important;
+    will-change: transform, box-shadow; /* Bật tăng tốc phần cứng */
 }
 
 /* Tablet: 2 thẻ/hàng */
@@ -71,8 +72,19 @@
     }
 }
 
+.animate-fade {
+    animation: fadeIn 0.25s ease-out forwards;
+    will-change: opacity;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 .animate-fade-in-up {
-    animation: fadeInUp 0.6s ease-out forwards;
+    animation: fadeInUp 0.35s ease-out forwards;
+    will-change: transform, opacity;
 }
 
 /* Hiệu ứng phát sáng nhẹ khi hover */
@@ -92,5 +104,21 @@
     padding-right: 50px;
 }
 .animate-marquee:hover {
+    animation-play-state: paused;
+}
+
+/* Hiệu ứng Feedback chạy ngang */
+@keyframes marqueeFast {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(0); }
+}
+
+.animate-marquee-fast {
+    animation: marqueeFast 40s linear infinite;
+    will-change: transform;
+}
+
+/* Tạm dừng hiệu ứng khi di chuột vào (Hover) */
+.group:hover .animate-marquee-fast {
     animation-play-state: paused;
 }
