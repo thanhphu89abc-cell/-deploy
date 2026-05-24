@@ -31,9 +31,11 @@ const App = {
             await this.loadData();
 
             // Render dữ liệu thật (sẽ thay thế skeleton)
-            this.renderDashboardCourses();
             this.updateUserInfoDisplay();
             this.renderCategoryDropdown();
+
+            // Khôi phục trạng thái trang (Giữ nguyên trang Học khi tải lại)
+            this.restorePageState();
 
             // Bắt đầu Polling kiểm tra trạng thái đơn hàng (Mỗi 10 giây)
             setInterval(() => this.pollOrderUpdates(), 10000);
@@ -308,6 +310,24 @@ const App = {
         this.dom.categoryList.appendChild(fragment);
     },
 
+    restorePageState() {
+        try {
+            const savedState = sessionStorage.getItem('coursera_page_state');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                if (state.view === 'learning' && state.courseId) {
+                    const course = this.state.courses.find(c => String(c.id) === String(state.courseId));
+                    if (course) {
+                        this.showLearningView(state.courseId, false, state.lessonId);
+                        return;
+                    }
+                }
+            }
+        } catch(e) {}
+        
+        this.showCatalogView();
+    },
+
     getCourseImage(course) {
         if (course.icon && typeof course.icon === 'string' && course.icon.trim() !== "" && course.icon !== "null") return course.icon;
         const defaultImages = [
@@ -445,6 +465,7 @@ const App = {
          showCatalogView() {
              this.state.activeView = "dashboard";
              this.state.currentPage = 1;
+        sessionStorage.setItem('coursera_page_state', JSON.stringify({ view: 'dashboard' }));
              this.dom.dashboardView.classList.remove("hidden");
              this.dom.learningView.classList.add("hidden");
              this.dom.btnBackToDashboard.classList.add("hidden");
@@ -455,9 +476,15 @@ const App = {
              this.renderDashboardCourses();
          },
  
-         showLearningView(courseId, forceLock = false) {
+         showLearningView(courseId, forceLock = false, lessonIdToLoad = null) {
              this.state.activeView = "learning";
+
+             // Xóa id bài học cũ nếu người dùng chuyển sang một khóa học khác
+             if (String(this.state.currentItemRef.courseId) !== String(courseId) && !lessonIdToLoad) {
+                 this.state.currentItemRef.lessonId = null;
+             }
              this.state.currentItemRef.courseId = courseId;
+        if (!forceLock) sessionStorage.setItem('coursera_page_state', JSON.stringify({ view: 'learning', courseId: courseId, lessonId: lessonIdToLoad || this.state.currentItemRef.lessonId }));
 
         this.dom.dashboardView.classList.add("hidden");
         this.dom.learningView.classList.remove("hidden");
@@ -475,7 +502,7 @@ const App = {
             option.innerText = c.title;
             this.dom.courseSelector.appendChild(option);
         });
-        const course = this.state.courses.find((c) => c.id === courseId);
+        const course = this.state.courses.find((c) => String(c.id) === String(courseId));
         if (!course) {
             this.showToast("Lỗi: Không tìm thấy dữ liệu khóa học.", "error");
             this.showCatalogView();
@@ -491,12 +518,16 @@ const App = {
         this.updateOverallProgress(course);
         // Check lock status to control the main content area
         if (course.lock_status === "UNLOCKED" && !forceLock) {
-            const firstLesson = course.weeks?.[0]?.items?.[0];
-            if (firstLesson) {
-                this.loadLesson(firstLesson.id);
+            if (lessonIdToLoad) {
+                this.loadLesson(lessonIdToLoad);
             } else {
-                this.dom.lessonMainTitle.innerText = "Khóa học chưa có nội dung";
-                this.dom.videoWrapper.innerHTML = `<div class="w-full h-full bg-black flex items-center justify-center text-gray-500">Chưa có bài giảng</div>`;
+                const firstLesson = course.weeks?.[0]?.items?.[0];
+                if (firstLesson) {
+                    this.loadLesson(firstLesson.id);
+                } else {
+                    this.dom.lessonMainTitle.innerText = "Khóa học chưa có nội dung";
+                    this.dom.videoWrapper.innerHTML = `<div class="w-full h-full bg-black flex items-center justify-center text-gray-500">Chưa có bài giảng</div>`;
+                }
             }
         } else {
             // Giao diện cho khóa học bị Khóa / Chưa mua
@@ -572,7 +603,7 @@ const App = {
                     ? "text-green-500 dark:text-green-400"
                     : "text-gray-400 dark:text-gray-500";
                 const activeClass =
-                    !isLocked && item.id === this.state.currentItemRef.lessonId
+                    !isLocked && String(item.id) === String(this.state.currentItemRef.lessonId)
                         ? "bg-blue-50 dark:bg-slate-800"
                         : "";
                 const clickAction = isLocked
@@ -622,13 +653,13 @@ const App = {
 
     async loadLesson(lessonId) {
         const course = this.state.courses.find(
-            (c) => c.id === this.state.currentItemRef.courseId,
+            (c) => String(c.id) === String(this.state.currentItemRef.courseId),
         );
         if (!course) return;
 
         let lesson = null;
         for (const week of course.weeks) {
-            const found = week.items.find((i) => i.id === lessonId);
+            const found = week.items.find((i) => String(i.id) === String(lessonId));
             if (found) {
                 lesson = found;
                 break;
@@ -641,11 +672,12 @@ const App = {
         }
 
         this.state.currentItemRef.lessonId = lessonId;
+        sessionStorage.setItem('coursera_page_state', JSON.stringify({ view: 'learning', courseId: this.state.currentItemRef.courseId, lessonId: lessonId }));
 
         this.renderLessonSkeleton();
         await new Promise((r) => setTimeout(r, 400)); // Tạo độ trễ ảo 400ms để hiệu ứng khung xương xuất hiện
 
-        if (this.state.currentItemRef.lessonId !== lessonId) return; // Chống ghi đè nếu học viên bấm nhanh bài khác
+        if (String(this.state.currentItemRef.lessonId) !== String(lessonId)) return; // Chống ghi đè nếu học viên bấm nhanh bài khác
 
         this.dom.lessonMainTitle.innerText = lesson.title;
         this.dom.lessonMainDesc.innerHTML =

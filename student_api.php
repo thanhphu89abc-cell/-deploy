@@ -346,9 +346,9 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     }
 
     // DÁN MÃ API KEY CỦA GOOGLE GEMINI VÀO ĐÂY
-    $api_key = 'YOUR_GEMINI_API_KEY';
+    $api_key = 'AIzaSyC3lrJN0s11XsN4m67HSqEOvRrO7t6xlnE';
     
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . $api_key;
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' . trim($api_key);
     
     // Cấu hình tính cách cho AI (Prompt Engineering)
     $system_prompt = "Bạn là CyberAI, một trợ lý học thuật chuyên gia về An toàn thông tin của nền tảng Coursera Advanced. Hãy trả lời câu hỏi sau một cách ngắn gọn, thân thiện, dễ hiểu và bằng tiếng Việt. QUAN TRỌNG: KHÔNG sử dụng ký tự Markdown (như *, #, **), chỉ sử dụng dấu xuống dòng để tách đoạn.\n\nCâu hỏi của học viên: " . $message;
@@ -376,7 +376,15 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
         }
     }
     
-    jsonResponse(["reply" => "Xin lỗi, hệ thống AI đang quá tải hoặc cấu hình API Key chưa đúng (Mã lỗi: $http_code)."]);
+    // Nếu có lỗi, trích xuất lỗi chi tiết từ Google để hiển thị
+    $error_msg = "Mã lỗi: $http_code";
+    if ($response) {
+        $res_json = json_decode($response, true);
+        if (isset($res_json['error']['message'])) {
+            $error_msg .= " - " . $res_json['error']['message'];
+        }
+    }
+    jsonResponse(["reply" => "Hệ thống AI gặp sự cố ($error_msg). Bạn vui lòng kiểm tra lại cấu hình."]);
 }
 
 jsonResponse(["message" => "Endpoint không hợp lệ."], 404);
