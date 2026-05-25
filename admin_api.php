@@ -1,8 +1,17 @@
 <?php
-// Bật báo lỗi để dễ debug
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+ini_set('display_errors', 0);
+error_reporting(0);
 ob_start();
+
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (ob_get_level()) ob_clean();
+        http_response_code(500);
+        echo json_encode(["message" => "Lỗi sập PHP: " . $error['message'] . " (Dòng " . $error['line'] . ")"]);
+        exit;
+    }
+});
 
 require 'db_connect.php';
 require_once 'vendor/autoload.php';
@@ -28,8 +37,10 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
 if (!$authHeader) {
-    $headers = apache_request_headers();
-    $authHeader = $headers['Authorization'] ?? ($headers['authorization'] ?? '');
+    if (function_exists('apache_request_headers')) {
+        $headers = apache_request_headers();
+        $authHeader = $headers['Authorization'] ?? ($headers['authorization'] ?? '');
+    }
 }
 
 // Bỏ qua check JWT qua Header cho API Invoice (vì dùng token qua query params)
@@ -107,15 +118,18 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     jsonResponse(["orders" => $orders]);
 } elseif (preg_match('#^/approve-order/(\d+)$#', $pathInfo, $matches) && $method === 'POST') {
     $order_id = $matches[1];
-    $conn->query("UPDATE orders SET current_step = 3 WHERE id = $order_id");
+    $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = $order_id");
+    if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["success" => true, "message" => "Đã duyệt thành công đơn hàng #$order_id."]);
 } elseif (preg_match('#^/cancel-order/(\d+)$#', $pathInfo, $matches) && $method === 'POST') {
     $order_id = $matches[1];
-    $conn->query("UPDATE orders SET current_step = 4 WHERE id = $order_id");
+    $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = $order_id");
+    if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["success" => true, "message" => "Đã hủy đơn hàng #$order_id."]);
 } elseif (preg_match('#^/orders/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
     $order_id = $matches[1];
-    $conn->query("DELETE FROM orders WHERE id = $order_id");
+    $res = $conn->query("DELETE FROM orders WHERE id = $order_id");
+    if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Xóa đơn hàng thành công."]);
 
 // 2.2 QUẢN LÝ HỌC VIÊN

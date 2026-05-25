@@ -3,6 +3,16 @@ ob_start();
 ini_set('display_errors', 0);
 error_reporting(0);
 
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (ob_get_level()) ob_clean();
+        http_response_code(500);
+        echo json_encode(["message" => "Lỗi sập PHP: " . $error['message'] . " (Dòng " . $error['line'] . ")"]);
+        exit;
+    }
+});
+
 require 'db_connect.php';
 require_once 'vendor/autoload.php';
 
@@ -119,13 +129,16 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     $price_val = intval($course['price']);
     
-    $stmt_check = $conn->prepare("SELECT id FROM orders WHERE user_id = ? AND course_name = ?");
+    $stmt_check = $conn->prepare("SELECT id, current_step FROM orders WHERE user_id = ? AND course_name = ?");
     $stmt_check->bind_param("is", $user_id, $course_id);
     $stmt_check->execute();
-    $stmt_check->bind_result($existing_id);
+    $stmt_check->bind_result($existing_id, $existing_step);
     if ($stmt_check->fetch()) {
         $order_id = $existing_id;
         $stmt_check->close();
+        if ($existing_step == 4) {
+            $conn->query("UPDATE orders SET current_step = 1 WHERE id = $order_id");
+        }
     } else {
         $stmt_check->close();
         $stmt_ins = $conn->prepare("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES (?, ?, ?, 1, NOW())");
@@ -272,8 +285,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 } elseif ($pathInfo === '/mock-webhook' && $method === 'POST') {
     $order_id = $input['order_id'] ?? '';
     if (!$order_id) jsonResponse(["message" => "Thiếu mã đơn hàng!"], 400);
-    $conn->query("UPDATE orders SET current_step = 3 WHERE id = " . intval($order_id) . " AND user_id = $user_id");
-    jsonResponse(["success" => true, "message" => "Thanh toán thành công. Khóa học đã được mở khóa!"]);
+    jsonResponse(["success" => true, "message" => "Đã gửi yêu cầu xác nhận! Vui lòng chờ Admin duyệt để cấp quyền vào học."]);
 } elseif ($pathInfo === '/cart-checkout' && $method === 'POST') {
     $course_ids = $input['course_ids'] ?? [];
     if (empty($course_ids)) jsonResponse(["message" => "Giỏ hàng trống!"], 400);
@@ -281,40 +293,35 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     $total_price = 0;
     $order_ids = [];
     
-    $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
-    $stmt = $conn->prepare("SELECT id, title, price FROM courses WHERE id IN ($placeholders)");
-    $types = str_repeat('s', count($course_ids));
-    $stmt->bind_param($types, ...$course_ids);
-    $stmt->execute();
-    $res = $stmt->get_result();
+    // Khắc phục lỗi sập PHP < 8.1 do hàm bind_param
+    $escaped_ids = array_map(function($id) use ($conn) { return "'" . $conn->real_escape_string($id) . "'"; }, $course_ids);
+    $in_clause = implode(',', $escaped_ids);
+    $res = $conn->query("SELECT id, title, price FROM courses WHERE id IN ($in_clause)");
+    if (!$res) jsonResponse(["message" => "Lỗi Database (courses): " . $conn->error], 500);
     
     $courses = [];
-    while ($row = $res->fetch_assoc()) {
-        $courses[] = $row;
-    }
-    $stmt->close();
+    while ($row = $res->fetch_assoc()) { $courses[] = $row; }
 
     if (empty($courses)) jsonResponse(["message" => "Khóa học không tồn tại!"], 404);
 
     foreach ($courses as $c) {
         $total_price += intval($c['price']);
+        $safe_c_id = $conn->real_escape_string($c['id']);
+        $price_val = intval($c['price']);
         
-        $stmt_check = $conn->prepare("SELECT id FROM orders WHERE user_id = ? AND course_name = ?");
-        $stmt_check->bind_param("is", $user_id, $c['id']);
-        $stmt_check->execute();
-        $stmt_check->bind_result($existing_id);
-        if ($stmt_check->fetch()) {
+        $res_check = $conn->query("SELECT id, current_step FROM orders WHERE user_id = $user_id AND course_name = '$safe_c_id'");
+        if (!$res_check) jsonResponse(["message" => "Lỗi Database (orders): " . $conn->error], 500);
+        
+        if ($row = $res_check->fetch_assoc()) {
+            $existing_id = $row['id'];
             $order_ids[] = $existing_id;
+            if ($row['current_step'] == 4) {
+                $conn->query("UPDATE orders SET current_step = 1 WHERE id = $existing_id");
+            }
         } else {
-            $stmt_check->close();
-            $stmt_ins = $conn->prepare("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES (?, ?, ?, 1, NOW())");
-            $price_val = intval($c['price']);
-            $stmt_ins->bind_param("isi", $user_id, $c['id'], $price_val);
-            $stmt_ins->execute();
+            $conn->query("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES ($user_id, '$safe_c_id', $price_val, 1, NOW())");
             $order_ids[] = $conn->insert_id;
-            $stmt_ins->close();
         }
-        if(isset($stmt_check) && $stmt_check instanceof mysqli_stmt) { @$stmt_check->close(); }
     }
 
     $cart_order_id = "CART_" . implode("_", $order_ids);
@@ -327,14 +334,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 } elseif ($pathInfo === '/mock-webhook-cart' && $method === 'POST') {
     $order_id = $input['order_id'] ?? '';
     if (strpos($order_id, 'CART_') === 0) {
-        $ids_str = str_replace("CART_", "", $order_id);
-        $oids = explode("_", $ids_str);
-        foreach ($oids as $oid) {
-            if ($oid) {
-                $conn->query("UPDATE orders SET current_step = 3 WHERE id = " . intval($oid) . " AND user_id = $user_id");
-            }
-        }
-        jsonResponse(["success" => true, "message" => "Thanh toán giỏ hàng thành công. Các khóa học đã mở khóa!"]);
+        jsonResponse(["success" => true, "message" => "Đã gửi yêu cầu xác nhận giỏ hàng! Vui lòng chờ Admin duyệt."]);
     } else {
         jsonResponse(["message" => "Mã đơn hàng không hợp lệ!"], 400);
     }
