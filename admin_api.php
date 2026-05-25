@@ -44,7 +44,7 @@ if (!$authHeader) {
 }
 
 // Bỏ qua check JWT qua Header cho API Invoice (vì dùng token qua query params)
-if (!(preg_match('#^/invoice/(\d+)$#', $pathInfo) && $method === 'GET')) {
+if (!(preg_match('#^/invoice/([^/]+)$#', $pathInfo) && $method === 'GET')) {
     if (empty($authHeader) || !preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
         if (ob_get_level()) ob_clean();
         http_response_code(401);
@@ -75,7 +75,7 @@ try {
     $stmt->close();
 
     if (!$user_role || !in_array($user_role, ['admin', 'teacher'])) {
-        if (preg_match('#^/invoice/(\d+)$#', $pathInfo)) {
+        if (preg_match('#^/invoice/([^/]+)$#', $pathInfo)) {
             if (ob_get_level()) ob_clean();
             http_response_code(403);
             die("Bạn không có quyền truy cập.");
@@ -87,7 +87,7 @@ try {
 } catch (Exception $e) {
     if (ob_get_level()) ob_clean();
     http_response_code(401);
-    if (preg_match('#^/invoice/(\d+)$#', $pathInfo)) {
+    if (preg_match('#^/invoice/([^/]+)$#', $pathInfo)) {
         die("Token không hợp lệ hoặc đã hết hạn.");
     }
     die(json_encode(["message" => "Token không hợp lệ hoặc đã hết hạn."]));
@@ -121,25 +121,25 @@ if ($pathInfo === '/orders' && $method === 'GET') {
         }
     }
     jsonResponse(["orders" => $orders]);
-} elseif (preg_match('#^/approve-order/(\d+)$#', $pathInfo, $matches) && $method === 'POST') {
-    $order_id = $matches[1];
-    $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = $order_id");
+} elseif (preg_match('#^/approve-order/([^/]+)$#', $pathInfo, $matches) && $method === 'POST') {
+    $order_id = $conn->real_escape_string($matches[1]);
+    $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = '$order_id'");
     if (!$res) {
         // Tự động thêm cột current_step nếu DB của bạn chưa có
         if (strpos($conn->error, 'current_step') !== false) {
             $conn->query("ALTER TABLE orders ADD COLUMN current_step INT DEFAULT 1");
-            $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = $order_id");
+            $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = '$order_id'");
         }
         if (!$res) jsonResponse(["message" => "Lỗi Database: " . mb_convert_encoding($conn->error, 'UTF-8', 'auto')], 500);
     }
     jsonResponse(["success" => true, "message" => "Đã duyệt thành công đơn hàng #$order_id."]);
-} elseif (preg_match('#^/cancel-order/(\d+)$#', $pathInfo, $matches) && $method === 'POST') {
-    $order_id = $matches[1];
-    $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = $order_id");
+} elseif (preg_match('#^/cancel-order/([^/]+)$#', $pathInfo, $matches) && $method === 'POST') {
+    $order_id = $conn->real_escape_string($matches[1]);
+    $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = '$order_id'");
     if (!$res) {
         if (strpos($conn->error, 'current_step') !== false) {
             $conn->query("ALTER TABLE orders ADD COLUMN current_step INT DEFAULT 1");
-            $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = $order_id");
+            $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = '$order_id'");
         }
         if (!$res) jsonResponse(["message" => "Lỗi Database: " . mb_convert_encoding($conn->error, 'UTF-8', 'auto')], 500);
     }
@@ -148,9 +148,9 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     $res = $conn->query("DELETE FROM orders WHERE current_step = 4");
     if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Đã dọn dẹp toàn bộ đơn hàng bị hủy."]);
-} elseif (preg_match('#^/orders/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $order_id = $matches[1];
-    $res = $conn->query("DELETE FROM orders WHERE id = $order_id");
+} elseif (preg_match('#^/orders/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
+    $order_id = $conn->real_escape_string($matches[1]);
+    $res = $conn->query("DELETE FROM orders WHERE id = '$order_id'");
     if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Xóa đơn hàng thành công."]);
 
@@ -182,7 +182,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     $stmt->bind_param("ssss", $fullname, $email, $hashed, $role);
     $stmt->execute();
     jsonResponse(["message" => "Thêm người dùng thành công"], 201);
-} elseif (preg_match('#^/users/(\d+)$#', $pathInfo, $matches) && $method === 'PUT') {
+} elseif (preg_match('#^/users/([^/]+)$#', $pathInfo, $matches) && $method === 'PUT') {
     $uid = $matches[1];
     $fullname = $input['fullname'] ?? '';
     $email = $input['email'] ?? '';
@@ -192,16 +192,16 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     if ($password) {
         $hashed = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ?, password_hash = ? WHERE id = ?");
-        $stmt->bind_param("ssssi", $fullname, $email, $role, $hashed, $uid);
+        $stmt->bind_param("sssss", $fullname, $email, $role, $hashed, $uid);
     } else {
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ? WHERE id = ?");
-        $stmt->bind_param("sssi", $fullname, $email, $role, $uid);
+        $stmt->bind_param("ssss", $fullname, $email, $role, $uid);
     }
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật thông tin người dùng thành công."]);
-} elseif (preg_match('#^/users/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $uid = $matches[1];
-    $conn->query("DELETE FROM users WHERE id = $uid");
+} elseif (preg_match('#^/users/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
+    $uid = $conn->real_escape_string($matches[1]);
+    $conn->query("DELETE FROM users WHERE id = '$uid'");
     jsonResponse(["message" => "Xóa người dùng thành công."]);
 
 // 2.3 DOANH THU THỐNG KÊ & HÓA ĐƠN
@@ -215,10 +215,10 @@ if ($pathInfo === '/orders' && $method === 'GET') {
         }
     }
     jsonResponse(["revenue" => $revenue]);
-} elseif (preg_match('#^/invoice/(\d+)$#', $pathInfo, $matches) && $method === 'GET') {
+} elseif (preg_match('#^/invoice/([^/]+)$#', $pathInfo, $matches) && $method === 'GET') {
     $order_id = $matches[1];
     $stmt = $conn->prepare("SELECT o.id, o.course_name, o.price, o.current_step, o.created_at, u.fullname as user_fullname, u.email as user_email FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?");
-    $stmt->bind_param("i", $order_id);
+    $stmt->bind_param("s", $order_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $order = $result->fetch_assoc();
@@ -344,13 +344,13 @@ HTML;
     $weeks_res = $stmt->get_result();
     while ($w = $weeks_res->fetch_assoc()) {
         $l_stmt = $conn->prepare("SELECT id FROM lessons WHERE week_id = ?");
-        $l_stmt->bind_param("i", $w['id']);
+        $l_stmt->bind_param("s", $w['id']);
         $l_stmt->execute();
         $l_res = $l_stmt->get_result();
         while ($l = $l_res->fetch_assoc()) {
-            $conn->query("DELETE FROM user_progress WHERE lesson_id = " . $l['id']);
+            $conn->query("DELETE FROM user_progress WHERE lesson_id = '" . $l['id'] . "'");
         }
-        $conn->query("DELETE FROM lessons WHERE week_id = " . $w['id']);
+        $conn->query("DELETE FROM lessons WHERE week_id = '" . $w['id'] . "'");
     }
     $conn->query("DELETE FROM course_weeks WHERE course_id = '$c_id'");
     $conn->query("DELETE FROM courses WHERE id = '$c_id'");
@@ -365,38 +365,38 @@ HTML;
     $stmt->bind_param("sis", $c_id, $week_number, $title);
     $stmt->execute();
     jsonResponse(["message" => "Thêm tuần học mới thành công."], 201);
-} elseif (preg_match('#^/weeks/(\d+)$#', $pathInfo, $matches) && $method === 'PUT') {
+} elseif (preg_match('#^/weeks/([^/]+)$#', $pathInfo, $matches) && $method === 'PUT') {
     $w_id = $matches[1];
     $week_number = $input['week_number'] ?? 1;
     $title = $input['title'] ?? 'Tuần mới';
 
     $stmt = $conn->prepare("UPDATE course_weeks SET week_number = ?, title = ? WHERE id = ?");
-    $stmt->bind_param("isi", $week_number, $title, $w_id);
+    $stmt->bind_param("iss", $week_number, $title, $w_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật tuần học thành công."]);
-} elseif (preg_match('#^/weeks/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $w_id = $matches[1];
+} elseif (preg_match('#^/weeks/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
+    $w_id = $conn->real_escape_string($matches[1]);
     $stmt = $conn->prepare("SELECT id FROM lessons WHERE week_id = ?");
-    $stmt->bind_param("i", $w_id);
+    $stmt->bind_param("s", $w_id);
     $stmt->execute();
     $l_res = $stmt->get_result();
     while ($l = $l_res->fetch_assoc()) {
-        $conn->query("DELETE FROM user_progress WHERE lesson_id = " . $l['id']);
+        $conn->query("DELETE FROM user_progress WHERE lesson_id = '" . $l['id'] . "'");
     }
-    $conn->query("DELETE FROM lessons WHERE week_id = $w_id");
-    $conn->query("DELETE FROM course_weeks WHERE id = $w_id");
+    $conn->query("DELETE FROM lessons WHERE week_id = '$w_id'");
+    $conn->query("DELETE FROM course_weeks WHERE id = '$w_id'");
     jsonResponse(["message" => "Xóa tuần học thành công."]);
-} elseif (preg_match('#^/weeks/(\d+)/lessons$#', $pathInfo, $matches) && $method === 'POST') {
+} elseif (preg_match('#^/weeks/([^/]+)/lessons$#', $pathInfo, $matches) && $method === 'POST') {
     $w_id = $matches[1];
     $title = $input['title'] ?? 'Bài học mới';
     $type = $input['type'] ?? 'video';
     $duration = 10;
     
     $stmt = $conn->prepare("INSERT INTO lessons (week_id, type, title, duration) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("issi", $w_id, $type, $title, $duration);
+    $stmt->bind_param("sssi", $w_id, $type, $title, $duration);
     $stmt->execute();
     jsonResponse(["message" => "Thêm bài học mới thành công."], 201);
-} elseif (preg_match('#^/lessons/(\d+)$#', $pathInfo, $matches) && $method === 'PUT') {
+} elseif (preg_match('#^/lessons/([^/]+)$#', $pathInfo, $matches) && $method === 'PUT') {
     $l_id = $matches[1];
     $title = $input['title'] ?? null;
     $video_url = $input['video_url'] ?? null;
@@ -408,13 +408,13 @@ HTML;
     $flag = $input['flag'] ?? null;
 
     $stmt = $conn->prepare("UPDATE lessons SET title=?, video_url=?, description=?, quiz_question=?, quiz_option_a=?, quiz_option_b=?, quiz_correct_answer=?, flag=? WHERE id=?");
-    $stmt->bind_param("ssssssssi", $title, $video_url, $description, $quiz_question, $quiz_option_a, $quiz_option_b, $quiz_correct_answer, $flag, $l_id);
+    $stmt->bind_param("sssssssss", $title, $video_url, $description, $quiz_question, $quiz_option_a, $quiz_option_b, $quiz_correct_answer, $flag, $l_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật bài học thành công."]);
-} elseif (preg_match('#^/lessons/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $l_id = $matches[1];
-    $conn->query("DELETE FROM user_progress WHERE lesson_id = $l_id");
-    $conn->query("DELETE FROM lessons WHERE id = $l_id");
+} elseif (preg_match('#^/lessons/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
+    $l_id = $conn->real_escape_string($matches[1]);
+    $conn->query("DELETE FROM user_progress WHERE lesson_id = '$l_id'");
+    $conn->query("DELETE FROM lessons WHERE id = '$l_id'");
     jsonResponse(["message" => "Xóa bài học thành công."]);
 
 // 2.5 QUẢN LÝ MÃ GIẢM GIÁ
@@ -443,15 +443,15 @@ HTML;
     $stmt->bind_param("sd", $code, $rate);
     $stmt->execute();
     jsonResponse(["message" => "Thêm mã giảm giá thành công."], 201);
-} elseif (preg_match('#^/discounts/(\d+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $disc_id = $matches[1];
-    $conn->query("DELETE FROM discount_codes WHERE id = $disc_id");
+} elseif (preg_match('#^/discounts/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
+    $disc_id = $conn->real_escape_string($matches[1]);
+    $conn->query("DELETE FROM discount_codes WHERE id = '$disc_id'");
     jsonResponse(["message" => "Xóa mã giảm giá thành công."]);
-} elseif (preg_match('#^/discounts/(\d+)$#', $pathInfo, $matches) && $method === 'PUT') {
+} elseif (preg_match('#^/discounts/([^/]+)$#', $pathInfo, $matches) && $method === 'PUT') {
     $disc_id = $matches[1];
     $is_active = isset($input['is_active']) ? (int)$input['is_active'] : 1;
     $stmt = $conn->prepare("UPDATE discount_codes SET is_active = ? WHERE id = ?");
-    $stmt->bind_param("ii", $is_active, $disc_id);
+    $stmt->bind_param("is", $is_active, $disc_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật trạng thái thành công."]);
 

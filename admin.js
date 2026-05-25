@@ -742,9 +742,9 @@ function renderAdminCourses() {
                 <div class="flex items-center justify-between mb-2 mt-4">
                     <h4 class="font-bold text-gray-800 dark:text-gray-200 uppercase text-xs tracking-wider">Tuần ${week.week_number}: ${week.title}</h4>
                     <div class="space-x-1 flex items-center">
-                        <button onclick="openAddLessonModal(${week.id})" class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 rounded-lg text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-1"></i> Bài học</button>
-                        <button onclick="openEditWeekModal('${course.id}', ${week.id})" class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 rounded-lg text-[10px] font-bold transition-colors" title="Sửa tuần học"><i class="fa-solid fa-pen"></i></button>
-                        <button onclick="deleteWeek(${week.id})" class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 rounded-lg text-[10px] font-bold transition-colors" title="Xóa tuần học"><i class="fa-solid fa-trash-can"></i></button>
+                        <button onclick="openAddLessonModal('${week.id}')" class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 rounded-lg text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-1"></i> Bài học</button>
+                        <button onclick="openEditWeekModal('${course.id}', '${week.id}')" class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 rounded-lg text-[10px] font-bold transition-colors" title="Sửa tuần học"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteWeek('${week.id}')" class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 rounded-lg text-[10px] font-bold transition-colors" title="Xóa tuần học"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
                 </div>
                 <ul class="space-y-2">`;
@@ -756,8 +756,8 @@ function renderAdminCourses() {
                       <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">${lesson.title}</span>
                     </div>
                     <div class="space-x-1 flex items-center">
-                        <button onclick="openLessonEditModal('${course.id}', ${week.id}, ${lesson.id})" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa</button>
-                        <button onclick="deleteLesson(${lesson.id})" class="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-trash-can"></i></button>
+                        <button onclick="openLessonEditModal('${course.id}', '${week.id}', '${lesson.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa</button>
+                        <button onclick="deleteLesson('${lesson.id}')" class="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
                 </li>`;
             });
