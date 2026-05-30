@@ -29,7 +29,7 @@ try {
     $user_id = $decoded->user_id;
 
     // 3. Lấy thông tin user (DÙNG FULLNAME thay vì username để không bị sập)
-    $stmt = $conn->prepare("SELECT id, email, fullname, role FROM users WHERE id = ?");
+    $stmt = $conn->prepare("SELECT id, email, fullname, role, created_at FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -39,6 +39,7 @@ try {
         http_response_code(401);
         die(json_encode(["message" => "Tài khoản không tồn tại"]));
     }
+    $user['created_at'] = isset($user['created_at']) ? date('d/m/Y', strtotime($user['created_at'])) : '---';
 
     // 4. Lấy danh sách đơn hàng (orders) để hiển thị trong Tài khoản
     $orders = [];
@@ -52,6 +53,22 @@ try {
             $orders[] = $row;
         }
     }
+
+    // Tính toán cấp bậc (Ranking) dựa trên số bài học đã hoàn thành
+    $progress_stmt = @$conn->prepare("SELECT COUNT(*) as completed_count FROM user_progress WHERE user_id = ?");
+    $rank = "Script Kiddie";
+    $rank_color = "text-gray-500";
+    if ($progress_stmt) {
+        $progress_stmt->bind_param("i", $user_id);
+        $progress_stmt->execute();
+        $completed_count = $progress_stmt->get_result()->fetch_assoc()['completed_count'] ?? 0;
+        
+        if ($completed_count >= 50) { $rank = "Elite Hacker"; $rank_color = "text-red-500"; }
+        elseif ($completed_count >= 20) { $rank = "White Hat"; $rank_color = "text-purple-500"; }
+        elseif ($completed_count >= 5) { $rank = "Cyber Explorer"; $rank_color = "text-green-500"; }
+    }
+    $user['rank'] = $rank;
+    $user['rank_color'] = $rank_color;
 
     // 5. Trả dữ liệu về cho coursera-script.js để hiển thị giao diện
     http_response_code(200);

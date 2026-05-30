@@ -1,216 +1,211 @@
 <!doctype html>
-<html lang="vi" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Đăng nhập - Coursera Advanced</title>
+<html lang="vi" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Đăng nhập - Coursera Advanced</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: "class" };</script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Source Sans Pro', sans-serif; }
+    .animate-fade-in-up { animation: fadeInUp 0.6s ease-out forwards; }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <!-- Thư viện Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 flex items-center justify-center min-h-screen p-4 text-gray-900 dark:text-gray-100">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = { darkMode: "class" };
-    </script>
+  <div class="w-full max-w-md bg-white dark:bg-[#0B0F19] rounded-3xl shadow-xl border border-gray-100 dark:border-slate-800 p-8 animate-fade-in-up relative overflow-hidden">
+    <!-- Decorative element -->
+    <div class="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
 
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap"
-      rel="stylesheet"
-    />
-
-    <link rel="stylesheet" href="coursera-style.css" />
-  </head>
-  <body
-    class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0B0F19] transition-colors duration-300 px-4 font-['Source_Sans_Pro']"
-  >
-    <div
-      class="max-w-md w-full bg-white dark:bg-slate-900 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none border border-gray-100 dark:border-slate-800 p-8 animate-fade-in-up"
-    >
+    <div class="relative z-10">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-black text-[#0056D2] tracking-tight mb-2">
-          coursera
-        </h1>
-        <p class="text-gray-500 dark:text-gray-400 font-semibold">
-          Đăng nhập để tiếp tục quá trình học
-        </p>
+        <h1 class="text-3xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 mb-2">coursera</h1>
+        <h2 class="text-xl font-bold text-gray-800 dark:text-white">Chào mừng trở lại</h2>
+        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Vui lòng đăng nhập để tiếp tục học tập</p>
+      </div>
+
+      <div id="error-message" class="hidden mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-bold flex items-start gap-3 border border-red-100 dark:border-red-900/30">
+        <i class="fa-solid fa-circle-exclamation mt-0.5"></i>
+        <span id="error-text">Email hoặc mật khẩu không đúng!</span>
       </div>
 
       <form id="login-form" class="space-y-5">
         <div>
-          <label
-            class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5"
-            >Email</label
-          >
+          <label for="email" class="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-1.5">Email của bạn</label>
           <div class="relative">
-            <div
-              class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-            >
-              <i class="fa-regular fa-envelope text-gray-400"></i>
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <i class="fa-solid fa-envelope text-gray-400"></i>
             </div>
-            <input
-              id="email-input"
-              type="email"
-              placeholder="student@example.com"
-              class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all"
-              required
-            />
+            <input type="email" id="email" name="email" required placeholder="name@example.com" class="w-full pl-11 pr-4 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] outline-none text-gray-900 dark:text-white transition-all text-sm font-medium">
           </div>
         </div>
 
         <div>
           <div class="flex items-center justify-between mb-1.5">
-            <label
-              class="block text-sm font-bold text-gray-700 dark:text-gray-300"
-              >Mật khẩu</label
-            >
-            <a
-              href="forgot-password.html"
-              class="text-xs font-bold text-[#0056D2] hover:text-blue-700 dark:text-blue-400"
-              >Quên mật khẩu?</a
-            >
+            <label for="password" class="block text-sm font-bold text-gray-700 dark:text-gray-300">Mật khẩu</label>
+            <a href="#" class="text-sm font-bold text-[#0056D2] dark:text-blue-400 hover:underline">Quên mật khẩu?</a>
           </div>
           <div class="relative">
-            <div
-              class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-            >
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <i class="fa-solid fa-lock text-gray-400"></i>
             </div>
-            <input
-              id="password-input"
-              type="password"
-              placeholder="••••••••"
-              class="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] dark:focus:ring-blue-500/20 text-gray-900 dark:text-white outline-none transition-all"
-              required
-            />
+            <input type="password" id="password" name="password" required placeholder="••••••••" class="w-full pl-11 pr-10 py-3 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] outline-none text-gray-900 dark:text-white transition-all text-sm font-medium">
+            <button type="button" id="toggle-password" class="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none">
+              <i class="fa-solid fa-eye"></i>
+            </button>
           </div>
         </div>
 
-        <div class="flex items-center">
-          <input
-            id="remember-me"
-            type="checkbox"
-            class="h-4 w-4 text-[#0056D2] focus:ring-[#0056D2] border-gray-300 rounded cursor-pointer"
-          />
-          <label
-            for="remember-me"
-            class="ml-2 block text-sm text-gray-600 dark:text-gray-400 cursor-pointer"
-          >
-            Ghi nhớ đăng nhập
+        <div class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 cursor-pointer group">
+            <input type="checkbox" class="w-4 h-4 text-[#0056D2] bg-gray-50 border-gray-300 rounded focus:ring-[#0056D2] dark:bg-slate-900 dark:border-slate-700">
+            <span class="text-sm font-medium text-gray-600 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">Ghi nhớ đăng nhập</span>
           </label>
         </div>
 
-        <button
-          id="submit-btn"
-          type="submit"
-          class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm flex justify-center items-center"
-        >
+        <button type="submit" id="submit-btn" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-blue-500/30 flex items-center justify-center gap-2 mt-4">
           <span>Đăng nhập</span>
+          <i class="fa-solid fa-arrow-right text-sm"></i>
         </button>
+        
+        <div class="flex items-center gap-4 mt-6">
+          <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
+          <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Hoặc</span>
+          <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
+        </div>
 
-        <div
-          id="error-msg"
-          class="hidden mt-3 text-center text-sm text-red-500 font-bold"
-        ></div>
+        <!-- Nút Đăng nhập bằng Google -->
+        <button type="button" onclick="loginWithGoogle()" class="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm flex justify-center items-center gap-2 mt-4">
+          <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
+          Đăng nhập bằng Google
+        </button>
       </form>
 
-      <div
-        class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400 font-medium"
-      >
-        Chưa có tài khoản?
-        <a
-          href="register.html"
-          class="text-[#0056D2] dark:text-blue-400 font-bold hover:underline"
-          >Đăng ký ngay</a
-        >
+      <div class="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
+        Chưa có tài khoản? 
+        <a href="register.html" class="font-bold text-[#0056D2] dark:text-blue-400 hover:underline">Đăng ký ngay</a>
       </div>
     </div>
+  </div>
 
-    <script>
-      // Thêm từ khóa 'async' để có thể dùng 'await fetch'
-      document
-        .getElementById("login-form")
-        .addEventListener("submit", async function (e) {
-          e.preventDefault();
+  <script>
+    // Xử lý ẩn/hiện mật khẩu
+    const togglePasswordBtn = document.getElementById('toggle-password');
+    const passwordInput = document.getElementById('password');
+    
+    togglePasswordBtn.addEventListener('click', () => {
+      const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+      passwordInput.setAttribute('type', type);
+      togglePasswordBtn.innerHTML = type === 'password' ? '<i class="fa-solid fa-eye"></i>' : '<i class="fa-solid fa-eye-slash"></i>';
+    });
 
-          const email = document.getElementById("email-input").value.trim();
-          const password = document.getElementById("password-input").value;
-          const btn = document.getElementById("submit-btn");
-          const errorMsg = document.getElementById("error-msg");
+    // Xử lý Đăng nhập
+    const loginForm = document.getElementById('login-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorBox = document.getElementById('error-message');
+    const errorText = document.getElementById('error-text');
 
-          errorMsg.classList.add("hidden");
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      
+      if (!email || !password) return;
 
-          // Giao diện nút Loading
-          const originalText = btn.innerHTML;
-          btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Đang xử lý...`;
-          btn.disabled = true;
-          btn.classList.add("opacity-75", "cursor-not-allowed");
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Đang xử lý...</span>';
+      errorBox.classList.add('hidden');
 
-          try {
-            // GỌI API BACKEND THỰC TẾ
-            const response = await fetch("login.php", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email: email, password: password }),
-            });
-
-            // ✅ Đọc raw text trước để debug
-            const rawText = await response.text();
-            console.log("RAW RESPONSE:", rawText); // Xem trong F12 > Console
-
-            // Sau đó mới parse JSON
-            let result;
-            try {
-              result = JSON.parse(rawText);
-              
-              // --- ĐOẠN CODE ĐƯỢC THÊM VÀO ĐỂ FIX LỖI MẢNG ---
-              if (Array.isArray(result)) {
-                  result = result[0];
-              }
-              // ----------------------------------------------
-              
-            } catch (parseErr) {
-              throw new Error(
-                `Server trả về không phải JSON: "${rawText.substring(0, 200)}"`,
-              );
-            }
-
-            if (response.ok) {
-              // Đăng nhập đúng -> Lưu token và email vào LocalStorage
-              localStorage.setItem(
-                "coursera_user_session",
-                JSON.stringify({
-                  email: result.user.email,
-                  fullname: result.user.fullname, // <--- Đổi chữ fullname cuối cùng thành username
-                  role: result.user.role,
-                  token: result.token,
-                }),
-              );
-
-              // Chuyển hướng sang trang học (index.html)
-              window.location.href = "coursera-index.html";
-            } else {
-              // Sai mật khẩu hoặc email
-              btn.innerHTML = originalText;
-              btn.disabled = false;
-              btn.classList.remove("opacity-75", "cursor-not-allowed");
-
-              errorMsg.innerText =
-                result.message || "Email hoặc mật khẩu không hợp lệ.";
-              errorMsg.classList.remove("hidden");
-            }
-          } catch (error) {
-            console.error(error);
-            // Lỗi sập server hoặc chưa bật Python
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            btn.classList.remove("opacity-75", "cursor-not-allowed");
-
-            errorMsg.innerText =
-              "Chi tiết lỗi: " + error.message + " (Nhấn F12 để xem thêm)";
-            errorMsg.classList.remove("hidden");
-          }
+      try {
+        const response = await fetch('login.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
         });
-    </script>
-  </body>
+
+        const data = await response.json();
+
+        if (response.ok) {
+          localStorage.setItem('coursera_user_session', JSON.stringify({
+            token: data.token,
+            role: data.user.role,
+            fullname: data.user.fullname
+          }));
+
+          if (data.user.role === 'admin' || data.user.role === 'teacher') {
+            window.location.href = 'admin.html';
+          } else {
+            window.location.href = 'coursera-index.html'; 
+          }
+        } else {
+          errorText.innerText = data.message || "Đăng nhập thất bại. Vui lòng thử lại.";
+          errorBox.classList.remove('hidden');
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+        }
+      } catch (error) {
+        errorText.innerText = "Lỗi kết nối tới máy chủ. Vui lòng thử lại sau.";
+        errorBox.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+      }
+    });
+
+    function loginWithGoogle() {
+      const clientId = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com"; // <-- THAY MÃ CLIENT ID CỦA BẠN VÀO ĐÂY SAU NHÉ
+      if (clientId.includes("YOUR_GOOGLE_CLIENT_ID_HERE")) {
+          alert("Nút Google đã hiển thị thành công! \n\nTuy nhiên, để chạy thật, bạn cần vào Google Cloud lấy Client ID thật và thay vào dòng chữ YOUR_GOOGLE_CLIENT_ID_HERE trong file login.html nhé.");
+          return;
+      }
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleLogin
+      });
+      google.accounts.id.prompt(); // Hiển thị popup chọn tài khoản Google
+    }
+
+    // Xử lý callback khi đăng nhập Google thành công
+    async function handleGoogleLogin(response) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Đang xác thực Google...</span>';
+      errorBox.classList.add('hidden');
+
+      try {
+        const res = await fetch('login.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ google_token: response.credential })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          localStorage.setItem('coursera_user_session', JSON.stringify({
+            token: data.token, role: data.user.role, fullname: data.user.fullname
+          }));
+
+          window.location.href = (data.user.role === 'admin' || data.user.role === 'teacher') ? 'admin.html' : 'coursera-index.html'; 
+        } else {
+          errorText.innerText = data.message || "Đăng nhập Google thất bại.";
+          errorBox.classList.remove('hidden');
+          submitBtn.disabled = false; submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+        }
+      } catch (error) {
+        errorText.innerText = "Lỗi kết nối tới máy chủ.";
+        errorBox.classList.remove('hidden');
+        submitBtn.disabled = false; submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+      }
+    }
+  </script>
+</body>
 </html>

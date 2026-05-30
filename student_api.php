@@ -83,6 +83,51 @@ if ($pathInfo === '/verify-otp' && $method === 'POST') {
 }
 
 // ==============================================
+// 1.5 XÁC THỰC CHỨNG CHỈ (PUBLIC API)
+// ==============================================
+if ($pathInfo === '/verify-certificate' && $method === 'POST') {
+    $cert_code = strtoupper(trim($input['code'] ?? ''));
+    if (empty($cert_code)) jsonResponse(["message" => "Vui lòng nhập mã chứng chỉ!"], 400);
+
+    // Định dạng mong đợi: CERT-SEC-0001-COURSE_ID
+    if (preg_match('/^CERT-SEC-(\d+)-(.+)$/', $cert_code, $matches)) {
+        $u_id = intval($matches[1]);
+        $c_id = $matches[2];
+
+        $stmt_u = $conn->prepare("SELECT fullname FROM users WHERE id = ?");
+        $stmt_u->bind_param("i", $u_id);
+        $stmt_u->execute();
+        $user_res = $stmt_u->get_result()->fetch_assoc();
+        $stmt_u->close();
+
+        $stmt_c = $conn->prepare("SELECT title FROM courses WHERE id = ?");
+        $stmt_c->bind_param("s", $c_id);
+        $stmt_c->execute();
+        $course_res = $stmt_c->get_result()->fetch_assoc();
+        $stmt_c->close();
+
+        if ($user_res && $course_res) {
+            $stmt_total = $conn->prepare("SELECT COUNT(l.id) as total FROM lessons l JOIN course_weeks cw ON l.week_id = cw.id WHERE cw.course_id = ?");
+            $stmt_total->bind_param("s", $c_id);
+            $stmt_total->execute();
+            $total_lessons = $stmt_total->get_result()->fetch_assoc()['total'] ?? 0;
+            $stmt_total->close();
+
+            $stmt_completed = $conn->prepare("SELECT COUNT(up.lesson_id) as completed FROM user_progress up JOIN lessons l ON up.lesson_id = l.id JOIN course_weeks cw ON l.week_id = cw.id WHERE cw.course_id = ? AND up.user_id = ?");
+            $stmt_completed->bind_param("si", $c_id, $u_id);
+            $stmt_completed->execute();
+            $completed_lessons = $stmt_completed->get_result()->fetch_assoc()['completed'] ?? 0;
+            $stmt_completed->close();
+
+            if ($total_lessons > 0 && $total_lessons == $completed_lessons) {
+                jsonResponse(["valid" => true, "student_name" => $user_res['fullname'], "course_name" => $course_res['title'], "message" => "Chứng chỉ hợp lệ!"]);
+            }
+        }
+    }
+    jsonResponse(["valid" => false, "message" => "Mã chứng chỉ không tồn tại hoặc học viên chưa hoàn thành khóa học!"], 404);
+}
+
+// ==============================================
 // 2. KIỂM TRA ĐĂNG NHẬP CHO CÁC API TRONG TRANG HỌC
 // ==============================================
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
@@ -114,6 +159,55 @@ try {
 // ==============================================
 // 3. CÁC TÍNH NĂNG TƯƠNG TÁC
 // ==============================================
+if ($pathInfo === '/courses' && $method === 'GET') {
+    $courses = [];
+    $res = $conn->query("SELECT id, title, original_price, price, badge, color, icon FROM courses");
+    if ($res) {
+        while ($course = $res->fetch_assoc()) {
+            $course['weeks'] = [];
+            $safe_c_id = $conn->real_escape_string($course['id']);
+            $weeks_res = $conn->query("SELECT id, week_number, title FROM course_weeks WHERE course_id = '$safe_c_id' ORDER BY week_number");
+            if ($weeks_res) {
+                while ($week = $weeks_res->fetch_assoc()) {
+                    $week['items'] = [];
+                    $lessons_res = $conn->query("SELECT id, week_id, type, title, duration, video_url as videoSrc, description, quiz_question, quiz_option_a, quiz_option_b, quiz_correct_answer FROM lessons WHERE week_id = " . intval($week['id']) . " ORDER BY id");
+                    if ($lessons_res) {
+                        while ($lesson = $lessons_res->fetch_assoc()) { 
+                            if (!empty($lesson['quiz_question'])) {
+                                $lesson['quiz'] = [
+                                    "question" => $lesson['quiz_question'],
+                                    "options" => [
+                                        ["v" => "a", "t" => $lesson['quiz_option_a']],
+                                        ["v" => "b", "t" => $lesson['quiz_option_b']]
+                                    ],
+                                    "correct" => $lesson['quiz_correct_answer']
+                                ];
+                            } else {
+                                $lesson['quiz'] = null;
+                            }
+                            
+                            $prog_stmt = @$conn->prepare("SELECT id FROM user_progress WHERE user_id = ? AND lesson_id = ?");
+                            if ($prog_stmt) {
+                                $prog_stmt->bind_param("ii", $user_id, $lesson['id']);
+                                $prog_stmt->execute();
+                                $lesson['completed'] = $prog_stmt->get_result()->num_rows > 0;
+                                $prog_stmt->close();
+                            } else {
+                                $lesson['completed'] = false;
+                            }
+
+                            $week['items'][] = $lesson; 
+                        }
+                    }
+                    $course['weeks'][] = $week;
+                }
+            }
+            $courses[] = $course;
+        }
+    }
+    jsonResponse(["courses" => $courses]);
+}
+
 if ($pathInfo === '/checkout' && $method === 'POST') {
     $course_id = $input['course_id'] ?? '';
     if (!$course_id) jsonResponse(["message" => "Thiếu mã khóa học!"], 400);
@@ -137,7 +231,9 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
         $order_id = $existing_id;
         $stmt_check->close();
         if ($existing_step == 4) {
-            $conn->query("UPDATE orders SET current_step = 1 WHERE id = $order_id");
+            $stmt_upd = $conn->prepare("UPDATE orders SET current_step = 1 WHERE id = ?");
+            $stmt_upd->bind_param("s", $order_id);
+            $stmt_upd->execute();
         }
     } else {
         $stmt_check->close();
@@ -154,11 +250,49 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     jsonResponse(["status" => "PENDING", "price" => $price_val, "memo" => $memo, "qr_url" => $qr_url, "order_id" => $order_id]);
 
+} elseif ($pathInfo === '/apply-discount' && $method === 'POST') {
+    $order_id = $input['order_id'] ?? '';
+    $code = strtoupper(trim($input['code'] ?? ''));
+
+    if (!$order_id || !$code) jsonResponse(["message" => "Thiếu thông tin mã giảm giá hoặc đơn hàng!"], 400);
+
+    $stmt = $conn->prepare("SELECT discount_rate FROM discount_codes WHERE code = ? AND is_active = 1");
+    $stmt->bind_param("s", $code);
+    $stmt->execute();
+    $discount_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$discount_row) jsonResponse(["message" => "Mã giảm giá không hợp lệ hoặc đã hết hạn!"], 400);
+
+    $discount_rate = floatval($discount_row['discount_rate']);
+
+    $stmt = $conn->prepare("SELECT o.id, c.price as original_price FROM orders o JOIN courses c ON o.course_name = c.id WHERE o.id = ? AND o.user_id = ?");
+    $stmt->bind_param("si", $order_id, $user_id);
+    $stmt->execute();
+    $order_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$order_row) jsonResponse(["message" => "Đơn hàng không hợp lệ!"], 404);
+
+    $original_price = intval($order_row['original_price']);
+    $new_price = intval($original_price * (1 - $discount_rate));
+
+    $stmt_disc = $conn->prepare("UPDATE orders SET price = ? WHERE id = ?");
+    $stmt_disc->bind_param("is", $new_price, $order_id);
+    $stmt_disc->execute();
+
+    $memo = "ATTT " . $order_id;
+    $account_name = "HOC VIEN COURSERA ATTT";
+    $qr_url = "https://api.vietqr.io/image/MB-0999999999-qr_only.png?amount={$new_price}&addInfo=" . urlencode($memo) . "&accountName=" . urlencode($account_name);
+
+    jsonResponse(["message" => "Áp dụng thành công! Đã giảm " . ($discount_rate * 100) . "%", "new_price" => $new_price, "original_price" => $original_price, "qr_url" => $qr_url]);
+
 } elseif ($pathInfo === '/progress' && $method === 'POST') {
     $lesson_id = $input['lesson_id'] ?? '';
     if (!$lesson_id) jsonResponse(["message" => "Thiếu mã bài học!"], 400);
     $stmt = $conn->prepare("INSERT IGNORE INTO user_progress (user_id, lesson_id) VALUES (?, ?)");
-    $stmt->bind_param("is
+    $stmt->bind_param("is", $user_id, $lesson_id);
+    $stmt->execute();
     jsonResponse(["message" => "Đã lưu tiến độ."]);
 
 } elseif ($pathInfo === '/review' && $method === 'POST') {
@@ -170,6 +304,30 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     $stmt->bind_param("isis", $user_id, $course_id, $rating, $comment);
     $stmt->execute();
     jsonResponse(["message" => "Cảm ơn bạn! Đánh giá đã được ghi nhận."]);
+
+} elseif ($pathInfo === '/change-password' && $method === 'POST') {
+    $old_password = $input['oldPassword'] ?? '';
+    $new_password = $input['newPassword'] ?? '';
+
+    if (!$old_password || !$new_password) jsonResponse(["message" => "Vui lòng nhập đầy đủ thông tin!"], 400);
+
+    $stmt = $conn->prepare("SELECT password_hash FROM users WHERE id = ?");
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$user || !password_verify($old_password, $user['password_hash'])) {
+        jsonResponse(["message" => "Mật khẩu cũ không chính xác!"], 400);
+    }
+
+    $new_hashed = password_hash($new_password, PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
+    $stmt->bind_param("si", $new_hashed, $user_id);
+    $stmt->execute();
+    $stmt->close();
+
+    jsonResponse(["message" => "Thay đổi mật khẩu thành công!"]);
 
 } elseif (preg_match('#^/certificate/([^/]+)$#', $pathInfo, $matches) && $method === 'GET') {
     $course_id = $matches[1];
@@ -183,7 +341,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
         die("Khóa học không tồn tại!");
     }
     
-    $cert_id = "CERT-SEC-" . strtoupper($course_id) . "-" . date('Y');
+    $cert_id = "CERT-SEC-" . str_pad($user_id, 4, '0', STR_PAD_LEFT) . "-" . strtoupper($course_id);
     $date = date('d/m/Y');
     $title = htmlspecialchars($course['title']);
     $name = htmlspecialchars($user_fullname);
@@ -269,13 +427,15 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     
     $stmt = $conn->prepare("SELECT flag FROM lessons WHERE id = ?");
     $stmt->bind_param("s", $lesson_id);
-    $stmt->execute();l_result()->fetch_assoc();
+    $stmt->execute();
+    $lesson = $stmt->get_result()->fetch_assoc();
     if (!$lesson || empty($lesson['flag'])) jsonResponse(["message" => "Bài học này không có cấu hình CTF Flag!"], 400);
     
     if ($flag === $lesson['flag']) {
         $stmt = $conn->prepare("INSERT IGNORE INTO user_progress (user_id, lesson_id) VALUES (?, ?)");
         $stmt->bind_param("is", $user_id, $lesson_id);
-        $stmt->execute();c> "Chính xác hoàn toàn! Tiến trình module đã được tích xanh."]);
+        $stmt->execute();
+        jsonResponse(["success" => true, "message" => "Chính xác hoàn toàn! Tiến trình module đã được tích xanh."]);
     } else {
         jsonResponse(["success" => false, "message" => "Sai cấu trúc Flag! Chuỗi mật mã băm trích xuất không trùng khớp."]);
     }
@@ -313,7 +473,9 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
             $existing_id = $row['id'];
             $order_ids[] = $existing_id;
             if ($row['current_step'] == 4) {
-                $conn->query("UPDATE orders SET current_step = 1 WHERE id = $existing_id");
+                $stmt_upd_cart = $conn->prepare("UPDATE orders SET current_step = 1 WHERE id = ?");
+                $stmt_upd_cart->bind_param("i", $existing_id);
+                $stmt_upd_cart->execute();
             }
         } else {
             $conn->query("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES ($user_id, '$safe_c_id', $price_val, 1, NOW())");

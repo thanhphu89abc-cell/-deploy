@@ -11,6 +11,7 @@ const App = {
         theme: "dark",
         currentRating: 0,
         cart: [],
+        notifications: [],
     },
     dom: {},
 
@@ -29,6 +30,9 @@ const App = {
             // Bắt đầu tải dữ liệu thật
             await this.checkAuth();
             await this.loadData();
+
+            // Tải thông báo cá nhân
+            this.loadNotifications();
 
             // Render dữ liệu thật (sẽ thay thế skeleton)
             this.updateUserInfoDisplay();
@@ -76,6 +80,7 @@ const App = {
             videoWrapper: document.getElementById("video-wrapper"),
             lessonMainTitle: document.getElementById("lesson-main-title"),
             lessonMainDesc: document.getElementById("lesson-main-desc"),
+            lessonSmartNotes: document.getElementById("lesson-smart-notes"),
             // Tabs
             tabButtons: document.querySelectorAll('[id^="tab-btn-"]'),
             tabContents: document.querySelectorAll('[id^="tab-content-"]'),
@@ -149,7 +154,7 @@ const App = {
             });
             if (res.ok) {
                 const data = await res.json();
-                let newlyApprovedCourseId = null;
+                let newlyApprovedCourses = [];
 
                 // So sánh đơn hàng cũ và mới
                 if (this.state.orders && this.state.orders.length > 0) {
@@ -162,20 +167,28 @@ const App = {
                             parseInt(oldOrder.current_step) === 1 &&
                             parseInt(newOrder.current_step) === 3
                         ) {
-                            newlyApprovedCourseId = newOrder.course_name;
+                            newlyApprovedCourses.push(newOrder.course_name);
                         }
                     });
                 }
 
                 this.state.orders = data.orders;
 
-                if (newlyApprovedCourseId) {
+                if (newlyApprovedCourses.length > 0) {
                     await this.loadData();
                     if (this.state.activeView === "dashboard") {
                         this.renderDashboardCourses();
                     }
                     this.updateUserInfoDisplay(); // Cập nhật lại Modal Lịch sử
-                    this.showCongratulation(newlyApprovedCourseId);
+                    
+                    newlyApprovedCourses.forEach(courseId => {
+                        const c = this.state.courses.find(course => String(course.id) === String(courseId));
+                        if (c) {
+                            this.addNotification("Đơn hàng được duyệt", `Lộ trình <span class="text-[#0056D2] dark:text-blue-400 font-bold">${c.title}</span> đã được duyệt. Vào học ngay!`, c.id);
+                        }
+                    });
+
+                    this.showCongratulation(newlyApprovedCourses[0]);
                 }
             }
         } catch (e) { }
@@ -183,7 +196,7 @@ const App = {
 
     async loadData() {
         try {
-            const res = await fetch("courses.php", {
+            const res = await fetch("student_api.php/courses", {
                 headers: { Authorization: `Bearer ${this.state.token}` },
             });
             const data = await res.json();
@@ -197,6 +210,15 @@ const App = {
     // ========================================================
     // QUẢN LÝ GIAO DIỆN (UI/UX)
     // ========================================================
+    isCourseUnlocked(courseId) {
+        if (this.state.user && (this.state.user.role === 'admin' || this.state.user.role === 'teacher')) return true;
+        if (Array.isArray(this.state.orders)) {
+            const order = this.state.orders.find(o => String(o.course_name) === String(courseId));
+            if (order && parseInt(order.current_step) === 3) return true;
+        }
+        return false;
+    },
+
     renderSkeletonCards(count) {
         if (!this.dom.coursesGrid) return;
         this.dom.coursesGrid.innerHTML = "";
@@ -348,119 +370,123 @@ const App = {
     renderDashboardCourses() {
         if (!this.dom.coursesGrid) return;
 
-        let filteredCourses = this.state.courses;
-        if (this.state.searchQuery) {
-            filteredCourses = filteredCourses.filter((c) =>
-                c.title.toLowerCase().includes(this.state.searchQuery) ||
-                (c.badge && c.badge.toLowerCase().includes(this.state.searchQuery))
+        try {
+            let filteredCourses = Array.isArray(this.state.courses) ? this.state.courses : [];
+            if (this.state.searchQuery) {
+                filteredCourses = filteredCourses.filter((c) =>
+                    (c.title && c.title.toLowerCase().includes(this.state.searchQuery)) ||
+                    (c.badge && c.badge.toLowerCase().includes(this.state.searchQuery))
+                );
+            }
+
+            const totalItems = filteredCourses.length;
+            if (this.dom.courseCountText)
+                this.dom.courseCountText.innerText = `Hiển thị ${totalItems} lộ trình`;
+
+            this.dom.coursesGrid.innerHTML = "";
+
+            if (totalItems === 0) {
+                this.dom.coursesGrid.innerHTML = `<div class="w-full py-12 text-center text-gray-500 dark:text-gray-400 font-bold"><i class="fa-solid fa-box-open text-4xl mb-3 block opacity-50"></i>Không tìm thấy khóa học nào.</div>`;
+                this.renderPaginationTabs(totalItems);
+                return;
+            }
+
+            const paginatedCourses = filteredCourses.slice(
+                (this.state.currentPage - 1) * this.state.itemsPerPage,
+                this.state.currentPage * this.state.itemsPerPage,
             );
-        }
 
-        const totalItems = filteredCourses.length;
-        if (this.dom.courseCountText)
-            this.dom.courseCountText.innerText = `Hiển thị ${totalItems} lộ trình`;
+            const fragment = document.createDocumentFragment();
 
-        this.dom.coursesGrid.innerHTML = "";
+            paginatedCourses.forEach((course) => {
+                const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+                const totalLessons = courseWeeks.reduce((sum, w) => sum + (Array.isArray(w.items) ? w.items.length : 0), 0);
+                const completedLessons = courseWeeks.reduce((sum, w) => sum + (Array.isArray(w.items) ? w.items.filter((i) => i.completed).length : 0), 0);
+                const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
-        if (totalItems === 0) {
-            this.dom.coursesGrid.innerHTML = `<div class="w-full py-12 text-center text-gray-500 dark:text-gray-400 font-bold"><i class="fa-solid fa-box-open text-4xl mb-3 block opacity-50"></i>Không tìm thấy khóa học nào.</div>`;
-            this.renderPaginationTabs(totalItems); // Thêm dòng này để xóa pagination khi không có kết quả
-            return;
-        }
+                const card = document.createElement("div");
+                card.className = "course-card bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-slate-800/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:-translate-y-1.5 transition-all duration-300 flex flex-col group/card";
 
-        const paginatedCourses = filteredCourses.slice(
-            (this.state.currentPage - 1) * this.state.itemsPerPage,
-            this.state.currentPage * this.state.itemsPerPage,
-        );
+                const isUnlocked = this.isCourseUnlocked(course.id);
 
-        const fragment = document.createDocumentFragment();
+                let actionButtonHTML = `
+                    <div class="mb-3 flex items-center justify-between border-t border-gray-100 dark:border-slate-800 pt-4 mt-2">
+                        <span class="text-sm font-bold text-gray-500 dark:text-gray-400">Học phí:</span>
+                        <span class="text-lg font-black text-[#0056D2] dark:text-blue-400">${Number(course.price || 0).toLocaleString('vi-VN')} đ</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="App.showLearningView('${course.id}', true)" class="flex-1 bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/30 dark:hover:bg-blue-900/50 text-[#0056D2] dark:text-blue-400 font-bold py-2.5 rounded-xl text-sm transition-colors shadow-sm"><i class="fa-solid fa-eye mr-1.5"></i> Xem khóa học</button>
+                        ${!isUnlocked ? `<button onclick="App.addToCart('${course.id}'); event.stopPropagation();" class="w-12 h-12 shrink-0 bg-[#0056D2] hover:bg-blue-700 text-white font-bold rounded-xl text-sm transition-colors flex items-center justify-center shadow-md shadow-blue-500/20" title="Thêm vào giỏ hàng"><i class="fa-solid fa-cart-plus text-lg"></i></button>` : `<button onclick="event.stopPropagation();" class="w-12 h-12 shrink-0 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 font-bold rounded-xl text-sm flex items-center justify-center shadow-sm cursor-default" title="Đã sở hữu"><i class="fa-solid fa-check text-xl"></i></button>`}
+                    </div>
+                `;
+     
+                let clickAction = `App.showLearningView('${course.id}', true)`;
+                     
+                const imageUrl = this.getCourseImage(course);
+                const bgStyle = `background-image: url('${imageUrl}'); background-size: cover; background-position: center;`;
+     
+                let badgeText = String(course.badge || "Chuyên đề");
+                let badgeClass = "bg-white/95 backdrop-blur text-[#0056D2]";
+                let badgeIcon = "";
 
-        paginatedCourses.forEach((course) => {
-            const totalLessons = course.weeks.reduce(
-                (sum, w) => sum + w.items.length,
-                0,
-            );
-            const completedLessons = course.weeks.reduce(
-                (sum, w) => sum + w.items.filter((i) => i.completed).length,
-                0,
-            );
-            const progress =
-                totalLessons > 0
-                    ? Math.round((completedLessons / totalLessons) * 100)
-                    : 0;
+                // Tự động nhận diện từ khóa để đổi màu Nhãn (Badge)
+                if (badgeText.toLowerCase().includes("hot") || badgeText.toLowerCase().includes("bán chạy")) {
+                    badgeClass = "bg-gradient-to-r from-red-500 to-orange-500 text-white shadow-md shadow-red-500/30 border border-red-400/30";
+                    badgeIcon = '<i class="fa-solid fa-fire text-yellow-200 mr-1.5 text-xs"></i>';
+                } else if (badgeText.toLowerCase().includes("mới") || badgeText.toLowerCase().includes("new")) {
+                    badgeClass = "bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-md shadow-green-500/30 border border-green-400/30";
+                    badgeIcon = '<i class="fa-solid fa-sparkles text-yellow-200 mr-1.5 text-xs"></i>';
+                }
 
-            const card = document.createElement("div");
-            card.className =
-                "course-card bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-slate-800/60 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.3)] hover:-translate-y-1.5 transition-all duration-300 flex flex-col group/card";
-
-            const isMyCourses = this.state.currentTab === "my_courses";
-
-                 let actionButtonHTML = isMyCourses
-                     ? `<button onclick="App.showLearningView('${course.id}')" class="w-full bg-blue-50 hover:bg-[#0056D2] dark:bg-blue-900/30 dark:hover:bg-[#0056D2] text-[#0056D2] hover:text-white dark:text-blue-400 dark:hover:text-white font-bold py-3 rounded-xl text-sm transition-all duration-300"><i class="fa-solid fa-play mr-1.5"></i> Vào học ngay</button>`
-                     : `<div class="flex gap-2">
-                         <button onclick="App.showLearningView('${course.id}', true)" class="flex-1 bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm transition-all shadow-[0_4px_14px_rgba(0,86,210,0.3)] hover:shadow-[0_6px_20px_rgba(0,86,210,0.4)]"><i class="fa-solid fa-graduation-cap mr-1.5"></i> Xem Khóa Học</button>
-                         <button onclick="App.addToCart('${course.id}'); event.stopPropagation();" class="w-12 h-12 shrink-0 bg-blue-50 hover:bg-[#0056D2] dark:bg-slate-800 dark:hover:bg-[#0056D2] text-[#0056D2] hover:text-white dark:text-blue-400 dark:hover:text-white font-bold rounded-xl transition-all flex items-center justify-center border border-blue-100 dark:border-slate-700 hover:border-transparent"><i class="fa-solid fa-cart-plus"></i></button>
-                        </div>`;
- 
-                 let clickAction = isMyCourses
-                     ? `App.showLearningView('${course.id}')`
-                     : `App.showLearningView('${course.id}', true)`;
-                 
-                 const imageUrl = this.getCourseImage(course);
-                 const bgStyle = `background-image: url('${imageUrl}'); background-size: cover; background-position: center;`;
- 
-                 card.innerHTML = `
-                     <div onclick="${clickAction}" class="relative cursor-pointer w-full shrink-0 overflow-hidden border-b border-gray-100 dark:border-slate-800" style="height: 180px;">
-                         <div class="absolute inset-0 group-hover/card:scale-105 transition-transform duration-700 ease-out z-0" style="${bgStyle}"></div>
-                         <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-0 opacity-80"></div>
-                         <div class="absolute inset-0 bg-[#0056D2]/20 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-0"></div>
-                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all duration-300 backdrop-blur-sm z-10">
-                             <span class="bg-white text-[#0056D2] font-bold px-6 py-2.5 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] transform translate-y-4 group-hover/card:translate-y-0 transition-transform duration-300 text-sm flex items-center gap-2">
-                                 <i class="fa-solid ${isMyCourses ? "fa-play" : "fa-arrow-right"}"></i> ${isMyCourses ? "Vào bài giảng" : "Xem lộ trình"}
-                             </span>
-                         </div>
-                         <div class="absolute top-3 left-3 z-20">
-                             <span class="text-[10px] font-black uppercase tracking-wider bg-white/95 backdrop-blur text-[#0056D2] px-3 py-1.5 rounded-full shadow-sm">${course.badge || "Chuyên đề"}</span>
-                         </div>
-                     </div>
-                     <div class="p-6 flex-1 flex flex-col bg-white dark:bg-slate-900 relative z-20">
-                         <div class="flex-1 cursor-pointer flex flex-col" onclick="${clickAction}">
-                             <div class="text-[11px] text-gray-400 dark:text-gray-500 mb-2 font-bold uppercase tracking-wider flex items-center gap-1.5"><i class="fa-solid fa-shield-halved"></i> Coursera Advanced</div>
-                             <h3 class="text-gray-900 dark:text-white font-black text-lg leading-snug group-hover/card:text-[#0056D2] dark:group-hover/card:text-blue-400 transition-colors line-clamp-2 mb-3" title="${course.title}">${course.title}</h3>
-                             
-                             <div class="mt-auto pt-2">
-                                 <div class="flex items-center justify-between text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
-                                     <span>Tiến độ</span>
-                                     <span class="text-[#0056D2] dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">${progress}%</span>
-                                 </div>
-                                 <div class="h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                     <div class="bg-gradient-to-r from-[#0056D2] to-blue-400 h-full transition-all duration-1000 ease-out" style="width: ${progress}%"></div>
-                                 </div>
-                                 
-                                 <div class="mt-5 flex flex-wrap gap-2 text-[11px] font-bold text-gray-600 dark:text-gray-400">
-                                     <span class="bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-slate-700/50 flex items-center gap-1.5"><i class="fa-solid fa-layer-group text-gray-400"></i> ${course.weeks.length} Module</span>
-                                     <span class="bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-slate-700/50 flex items-center gap-1.5"><i class="fa-solid fa-certificate text-gray-400"></i> Chứng chỉ</span>
-                                 </div>
-                                 ${!isMyCourses ? `
-                                 <div class="mt-4 pt-4 border-t border-gray-100 dark:border-slate-800/50 flex items-end justify-between gap-2">
-                                     <div class="flex flex-col">
-                                         ${course.original_price > course.price ? `<span class="text-xs font-semibold text-gray-400 line-through mb-0.5">${Number(course.original_price).toLocaleString('vi-VN')} đ</span>` : ''}
-                                         <span class="text-[#0056D2] dark:text-blue-400 font-black text-xl leading-none">${Number(course.price).toLocaleString('vi-VN')} đ</span>
-                                     </div>
-                                 </div>
-                                 ` : ''}
+                card.innerHTML = `
+                         <div onclick="${clickAction}" class="relative cursor-pointer w-full shrink-0 overflow-hidden border-b border-gray-100 dark:border-slate-800" style="height: 180px;">
+                             <div class="absolute inset-0 group-hover/card:scale-105 transition-transform duration-700 ease-out z-0" style="${bgStyle}"></div>
+                             <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent z-0 opacity-80"></div>
+                             <div class="absolute inset-0 bg-[#0056D2]/20 opacity-0 group-hover/card:opacity-100 transition-opacity duration-300 z-0"></div>
+                             <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all duration-300 backdrop-blur-sm z-10">
+                                 <span class="bg-white text-[#0056D2] font-bold px-6 py-2.5 rounded-full shadow-[0_4px_20px_rgba(0,0,0,0.15)] transform translate-y-4 group-hover/card:translate-y-0 transition-transform duration-300 text-sm flex items-center gap-2">
+                                     <i class="fa-solid fa-eye"></i> Xem khóa học
+                                 </span>
+                             </div>
+                             <div class="absolute top-3 left-3 z-20 flex flex-col gap-1.5 items-start">
+                                 <span class="text-[10px] font-black uppercase tracking-wider flex items-center px-3 py-1.5 rounded-full shadow-sm ${badgeClass}">${badgeIcon}${badgeText}</span>
+                                 ${course.original_price > course.price ? `<span class="text-[10px] font-black uppercase tracking-wider flex items-center px-3 py-1.5 rounded-full shadow-sm bg-gradient-to-r from-purple-500 to-pink-500 text-white border border-purple-400/30 shadow-purple-500/30 w-fit"><i class="fa-solid fa-tag mr-1.5"></i> Giảm ${Math.round((1 - course.price/course.original_price)*100)}%</span>` : ''}
                              </div>
                          </div>
-                         <div class="mt-5 shrink-0">
-                             ${actionButtonHTML}
+                         <div class="p-6 flex-1 flex flex-col bg-white dark:bg-slate-900 relative z-20">
+                             <div class="flex-1 cursor-pointer flex flex-col" onclick="${clickAction}">
+                                 <div class="text-[11px] text-gray-400 dark:text-gray-500 mb-2 font-bold uppercase tracking-wider flex items-center gap-1.5"><i class="fa-solid fa-shield-halved"></i> Coursera Advanced</div>
+                                 <h3 class="text-gray-900 dark:text-white font-black text-lg leading-snug group-hover/card:text-[#0056D2] dark:group-hover/card:text-blue-400 transition-colors line-clamp-2 mb-3" title="${course.title || ''}">${course.title || 'Khóa học'}</h3>
+                                 
+                                 <div class="mt-auto pt-2">
+                                     <div class="flex items-center justify-between text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">
+                                         <span>Tiến độ</span>
+                                         <span class="text-[#0056D2] dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-md">${progress}%</span>
+                                     </div>
+                                     <div class="h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                         <div class="bg-gradient-to-r from-[#0056D2] to-blue-400 h-full transition-all duration-1000 ease-out" style="width: ${progress}%"></div>
+                                     </div>
+                                     
+                                     <div class="mt-5 flex flex-wrap gap-2 text-[11px] font-bold text-gray-600 dark:text-gray-400">
+                                         <span class="bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-slate-700/50 flex items-center gap-1.5"><i class="fa-solid fa-layer-group text-gray-400"></i> ${courseWeeks.length} Module</span>
+                                         <span class="bg-gray-50 dark:bg-slate-800/50 px-3 py-1.5 rounded-lg border border-gray-100 dark:border-slate-700/50 flex items-center gap-1.5"><i class="fa-solid fa-certificate text-gray-400"></i> Chứng chỉ</span>
+                                     </div>
+                                 </div>
+                             </div>
+                             <div class="mt-5 shrink-0">
+                                 ${actionButtonHTML}
+                             </div>
                          </div>
-                     </div>
-                 `;
-                 fragment.appendChild(card);
-             });
-             this.dom.coursesGrid.appendChild(fragment);
-             this.renderPaginationTabs(totalItems);
-         },
+                     `;
+                fragment.appendChild(card);
+            });
+            this.dom.coursesGrid.appendChild(fragment);
+            this.renderPaginationTabs(totalItems);
+        } catch (error) {
+            console.error("Lỗi khi render thẻ khóa học:", error);
+            this.dom.coursesGrid.innerHTML = `<div class="w-full py-12 text-center text-red-500 font-bold">Đã xảy ra lỗi hiển thị khóa học. Vui lòng nhấn Ctrl + F5 để tải lại.</div>`;
+        }
+    },
  
          showCatalogView() {
              this.state.activeView = "dashboard";
@@ -494,7 +520,7 @@ const App = {
         // Populate and set the course selector dropdown
         this.dom.courseSelector.innerHTML = "";
         const unlockedCourses = this.state.courses.filter(
-            (c) => c.lock_status === "UNLOCKED",
+            (c) => this.isCourseUnlocked(c.id),
         );
         unlockedCourses.forEach((c) => {
             const option = document.createElement("option");
@@ -513,15 +539,16 @@ const App = {
         this.dom.sidebarCourseTitle.innerText = course.title;
         this.renderCourseNavigation(
             course,
-            forceLock || course.lock_status !== "UNLOCKED",
+            forceLock || !this.isCourseUnlocked(course.id),
         );
         this.updateOverallProgress(course);
-        // Check lock status to control the main content area
-        if (course.lock_status === "UNLOCKED" && !forceLock) {
+            
+            const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+            if (this.isCourseUnlocked(course.id) && !forceLock) {
             if (lessonIdToLoad) {
                 this.loadLesson(lessonIdToLoad);
             } else {
-                const firstLesson = course.weeks?.[0]?.items?.[0];
+                    const firstLesson = courseWeeks?.[0]?.items?.[0];
                 if (firstLesson) {
                     this.loadLesson(firstLesson.id);
                 } else {
@@ -535,7 +562,7 @@ const App = {
             let overlayTitle = "";
             let overlayDesc = "";
 
-            if (course.lock_status === "UNLOCKED") {
+            if (this.isCourseUnlocked(course.id)) {
                 overlayBtnHTML = `<button onclick="openAccountModal('my_courses')" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-3 px-8 rounded transition-colors shadow-sm flex items-center gap-2 mx-auto mt-6">
                     <i class="fa-solid fa-user"></i> Vào Tài khoản để học
                    </button>`;
@@ -571,7 +598,7 @@ const App = {
                         <h3 class="text-2xl font-bold text-gray-900 dark:text-white mb-3 tracking-tight">${overlayTitle}</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">${overlayDesc}</p>
                         <div class="flex items-center justify-center gap-6 text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-green-500"></i> ${course.weeks.length} Module chuyên sâu</span>
+                            <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-green-500"></i> ${courseWeeks.length} Module chuyên sâu</span>
                             <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-green-500"></i> Lab thực chiến</span>
                             <span class="flex items-center gap-1.5"><i class="fa-solid fa-check text-green-500"></i> Cấp chứng chỉ</span>
                         </div>
@@ -589,13 +616,15 @@ const App = {
         this.dom.courseNavigation.innerHTML = "";
         const fragment = document.createDocumentFragment();
 
-        course.weeks.forEach((week) => {
+            const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+            courseWeeks.forEach((week) => {
             const weekEl = document.createElement("div");
             weekEl.innerHTML = `<p class="px-4 pt-3 pb-1 text-[10px] font-black text-gray-400 dark:text-gray-500 uppercase tracking-wider">Tuần ${week.week_number}: ${week.title}</p>`;
             const ul = document.createElement("ul");
             ul.className = "px-2 space-y-0.5";
 
-            week.items.forEach((item) => {
+                const weekItems = Array.isArray(week.items) ? week.items : [];
+                weekItems.forEach((item) => {
                 const li = document.createElement("li");
                 const iconClass =
                     item.type === "video" ? "fa-circle-play" : "fa-microchip";
@@ -626,12 +655,12 @@ const App = {
         });
 
         // Add certificate button if course is 100% complete
-        const totalLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.length,
+            const totalLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.length : 0),
             0,
         );
-        const completedLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.filter((i) => i.completed).length,
+            const completedLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.filter((i) => i.completed).length : 0),
             0,
         );
         const progress =
@@ -658,8 +687,10 @@ const App = {
         if (!course) return;
 
         let lesson = null;
-        for (const week of course.weeks) {
-            const found = week.items.find((i) => String(i.id) === String(lessonId));
+            const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+            for (const week of courseWeeks) {
+                const weekItems = Array.isArray(week.items) ? week.items : [];
+                const found = weekItems.find((i) => String(i.id) === String(lessonId));
             if (found) {
                 lesson = found;
                 break;
@@ -723,6 +754,7 @@ const App = {
                 console.error("Lỗi lưu tiến trình:", e);
             }
         }
+        this.loadSmartNotes();
     },
 
     switchCourse(courseId) {
@@ -731,12 +763,13 @@ const App = {
     },
 
     updateOverallProgress(course) {
-        const totalLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.length,
+            const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+            const totalLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.length : 0),
             0,
         );
-        const completedLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.filter((i) => i.completed).length,
+            const completedLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.filter((i) => i.completed).length : 0),
             0,
         );
         const progress =
@@ -746,6 +779,19 @@ const App = {
 
         this.dom.overallProgressText.innerText = `${progress}%`;
         this.dom.overallProgress.style.width = `${progress}%`;
+    },
+
+    loadSmartNotes() {
+        if (!this.dom.lessonSmartNotes) return;
+        const key = `coursera_notes_${this.state.user?.email}_${this.state.currentItemRef.courseId}_${this.state.currentItemRef.lessonId}`;
+        const savedNote = localStorage.getItem(key);
+        this.dom.lessonSmartNotes.value = savedNote || "";
+    },
+
+    saveSmartNotes() {
+        if (!this.dom.lessonSmartNotes) return;
+        const key = `coursera_notes_${this.state.user?.email}_${this.state.currentItemRef.courseId}_${this.state.currentItemRef.lessonId}`;
+        localStorage.setItem(key, this.dom.lessonSmartNotes.value);
     },
 
     updateUserInfoDisplay() {
@@ -968,9 +1014,10 @@ const App = {
         const course = this.state.courses.find(
             (c) => c.id === this.state.currentItemRef.courseId,
         );
-        const lesson = course?.weeks
-            .flatMap((w) => w.items)
-            .find((i) => i.id === this.state.currentItemRef.lessonId);
+            const courseWeeks = Array.isArray(course?.weeks) ? course.weeks : [];
+            const lesson = courseWeeks
+                .flatMap((w) => Array.isArray(w.items) ? w.items : [])
+                .find((i) => String(i.id) === String(this.state.currentItemRef.lessonId));
 
         if (!lesson || !lesson.quiz) {
             this.showToast("Lỗi: Không tìm thấy dữ liệu quiz.", "error");
@@ -1149,7 +1196,7 @@ const App = {
     addToCart(courseId) {
         const course = this.state.courses.find(c => c.id === courseId);
         if (!course) return;
-        if (course.lock_status === "UNLOCKED") {
+        if (this.isCourseUnlocked(courseId)) {
             this.showToast("Bạn đã sở hữu khóa học này rồi!", "warning");
             return;
         }
@@ -1355,7 +1402,7 @@ const App = {
         msgEl.innerText = "Đang kiểm tra...";
 
         try {
-            const res = await fetch("apply_discount.php", {
+            const res = await fetch("student_api.php/apply-discount", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -1563,12 +1610,13 @@ const App = {
             return;
         }
 
-        const totalLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.length,
+            const courseWeeks = Array.isArray(course.weeks) ? course.weeks : [];
+            const totalLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.length : 0),
             0,
         );
-        const completedLessons = course.weeks.reduce(
-            (sum, w) => sum + w.items.filter((i) => i.completed).length,
+            const completedLessons = courseWeeks.reduce(
+                (sum, w) => sum + (Array.isArray(w.items) ? w.items.filter((i) => i.completed).length : 0),
             0,
         );
         const progress =
@@ -1753,7 +1801,7 @@ async function openAccountModal(targetSubTab = "profile") {
     const myCoursesContainer = document.getElementById("md-my-courses-container");
     myCoursesContainer.innerHTML = "";
     const myCourses = App.state.courses.filter(
-        (c) => c.lock_status === "UNLOCKED",
+        (c) => App.isCourseUnlocked(c.id),
     );
 
     if (myCourses.length > 0) {
@@ -1885,7 +1933,7 @@ async function handleModalChangePassword(event) {
     btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang cập nhật...`;
 
     try {
-        const res = await fetch("change_password.php", {
+        const res = await fetch("student_api.php/change-password", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

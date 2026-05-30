@@ -1,35 +1,23 @@
 <?php
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-declare(strict_types=1);
+// Xử lý yêu cầu pre-flight của trình duyệt
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+    exit(0);
+}
 
-mysqli_report(MYSQLI_REPORT_OFF);
+$host = "localhost";
+$user = "root";
+$password = "";
+$database = "coursera_advanced_db";
+$port = 3307;
 
-/**
- * DATABASE CONFIG
- */
-$db_host = "localhost";
-$db_user = "root";
-$db_pass = "";
-$db_name = "coursera_advanced_db";
-$db_port = 3307;
+$conn = new mysqli($host, $user, $password, $database, $port);
 
-/**
- * MYSQLI CONNECT
- */
-$conn = new mysqli(
-    $db_host,
-    $db_user,
-    $db_pass,
-    $db_name,
-    $db_port
-);
-
-/**
- * CHECK CONNECTION
- */
 if ($conn->connect_error) {
-    if (ob_get_level()) ob_clean();
     http_response_code(500);
     die(json_encode(["message" => "Kết nối CSDL thất bại: " . $conn->connect_error]));
 }
-// Không để bất kỳ dấu cách hay thẻ ?>
+?>

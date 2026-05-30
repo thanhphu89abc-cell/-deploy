@@ -111,7 +111,8 @@ async function loadOrders() {
     }
 
     try {
-      const response = await fetch('admin_api.php/orders', {
+      // Thêm ?t= thời gian thực để ép trình duyệt không bao giờ lưu bộ nhớ đệm (Cache)
+      const response = await fetch('admin_api.php/orders?t=' + new Date().getTime(), {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -125,6 +126,8 @@ async function loadOrders() {
       const data = await response.json();
       allOrders = data.orders;
       renderOrders();
+      
+      updateDashboardStats(); // Gọi cập nhật số liệu
 
     } catch (error) {
       console.error("Lỗi tải đơn hàng:", error);
@@ -218,9 +221,9 @@ function renderOrders() {
             <td class="p-4 text-center">${statusBadge}</td>
             <td class="p-4 text-right font-bold text-[#0056D2] dark:text-blue-400">${Number(order.price).toLocaleString('vi-VN')} đ</td>
             <td class="p-4 text-center space-x-1">
-              ${step === 1 ? `<span class="action-buttons-wrapper space-x-1"><button onclick="approveOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors">Duyệt đơn</button><button onclick="cancelOrder(${order.id}, this)" class="px-3 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors">Hủy đơn</button></span>` : ''}
+              ${step === 1 ? `<span class="action-buttons-wrapper space-x-1"><button onclick="approveOrder(${order.id}, this)" class="px-2.5 py-1.5 text-xs font-bold bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"><i class="fa-solid fa-check"></i></button><button onclick="cancelOrder(${order.id}, this)" class="px-2.5 py-1.5 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg transition-colors"><i class="fa-solid fa-xmark"></i></button></span>` : ''}
               <button onclick="downloadInvoice(${order.id})" class="px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors" title="Biên lai ghi danh"><i class="fa-solid fa-file-pdf"></i></button>
-              <button onclick="deleteOrder(${order.id})" class="px-3 py-1.5 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Xóa ghi danh"><i class="fa-solid fa-trash-can"></i></button>
+              <button onclick="deleteOrder(${order.id})" class="px-3 py-1.5 text-xs font-bold bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg transition-colors" title="Xóa ghi danh"><i class="fa-solid fa-trash-can"></i></button>
             </td>
           </tr>
         `;
@@ -403,12 +406,13 @@ async function clearAllCancelledOrders() {
 async function loadUsers() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('admin_api.php/users', {
+        const response = await fetch('admin_api.php/users?t=' + new Date().getTime(), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         allUsers = data.users;
         renderUsers();
+        updateDashboardStats(); // Gọi cập nhật số liệu
     } catch (error) {
         console.error("Lỗi tải người dùng:", error);
     }
@@ -435,8 +439,8 @@ function renderUsers() {
                 <td class="p-4 text-center">${roleBadge}</td>
                 <td class="p-4 text-center text-gray-500">${user.created_at}</td>
                 <td class="p-4 text-center space-x-2">
-                    <button onclick="openUserModal(${user.id})" class="px-3 py-1.5 text-xs font-bold bg-gray-200 hover:bg-gray-300 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-800 dark:text-white rounded-lg">Sửa</button>
-                    <button onclick="deleteUser(${user.id})" class="px-3 py-1.5 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 rounded-lg">Xóa</button>
+                    <button onclick="openUserModal(${user.id})" class="px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-700 dark:text-gray-300 rounded-lg transition-colors"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="deleteUser(${user.id})" class="px-3 py-1.5 text-xs font-bold bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-lg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
                 </td>
             </tr>
         `;
@@ -500,11 +504,13 @@ function openUserModal(userId = null) {
         document.getElementById('user-password-input').required = true;
     }
     modal.classList.remove('hidden');
+    setTimeout(() => modal.classList.remove('opacity-0'), 10);
 }
 
 function closeUserModal() {
     const modal = document.getElementById('user-modal');
-    modal.classList.add('hidden');
+    modal.classList.add('opacity-0');
+    setTimeout(() => modal.classList.add('hidden'), 300);
     document.getElementById('user-password-input').required = false;
 }
 
@@ -591,49 +597,69 @@ function switchAdminTab(tabName) {
     const views = ['dashboard', 'orders', 'users', 'courses', 'discounts'];
     views.forEach(v => {
         const el = document.getElementById(`view-${v}`);
-        if(el) el.classList.add('hidden');
+        if(el) {
+            el.classList.add('hidden');
+            el.classList.remove('animate-fade');
+        }
     });
 
     const targetView = document.getElementById(`view-${tabName}`);
-    if(targetView) targetView.classList.remove('hidden');
+    if(targetView) {
+        targetView.classList.remove('hidden');
+        targetView.classList.add('animate-fade');
+    }
 
     document.querySelectorAll('#admin-nav a').forEach(a => {
-        a.classList.remove('bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
-        a.classList.add('hover:bg-gray-100', 'dark:hover:bg-slate-800');
+        a.classList.remove('bg-[#0056D2]', 'text-white', 'shadow-md', 'shadow-blue-500/20', 'bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
+        a.classList.add('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'text-gray-500', 'dark:text-gray-400');
     });
     const activeLink = document.querySelector(`#admin-nav a[data-tab="${tabName}"]`);
     if(activeLink) {
         activeLink.classList.add('bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
-        activeLink.classList.remove('hover:bg-gray-100', 'dark:hover:bg-slate-800');
+        activeLink.classList.remove('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'hover:text-gray-900', 'dark:hover:text-white', 'text-gray-500', 'dark:text-gray-400');
     }
 
     if (tabName === 'dashboard') {
         loadRevenueData();
     }
-    if (tabName === 'orders' && allOrders.length === 0) {
+    if (tabName === 'orders') {
         loadOrders();
     }
-    if (tabName === 'users' && allUsers.length === 0) {
+    if (tabName === 'users') {
         loadUsers();
     }
-    if (tabName === 'courses' && adminCourses.length === 0) {
+    if (tabName === 'courses') {
         loadAdminCourses();
     }
-    if (tabName === 'discounts' && allDiscounts.length === 0) {
+    if (tabName === 'discounts') {
         loadDiscounts();
     }
+}
+
+// Cập nhật các thẻ thống kê tổng quan
+function updateDashboardStats() {
+    const statOrders = document.getElementById('stat-orders');
+    const statUsers = document.getElementById('stat-users');
+    
+    if (statOrders) statOrders.innerText = allOrders.length;
+    if (statUsers) statUsers.innerText = allUsers.length;
 }
 
 async function loadRevenueData() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     if (!token) return;
     try {
-        const response = await fetch('admin_api.php/revenue', {
+        const response = await fetch('admin_api.php/revenue?t=' + new Date().getTime(), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         if (response.ok) {
             renderRevenueChart(data.revenue);
+            
+            // Tính tổng doanh thu
+            const totalRev = data.revenue.reduce((sum, item) => sum + parseInt(item.total_revenue), 0);
+            const statRev = document.getElementById('stat-revenue');
+            if (statRev) statRev.innerText = totalRev.toLocaleString('vi-VN') + ' đ';
         }
     } catch (error) {
         console.error("Lỗi tải thống kê doanh thu:", error);
@@ -658,7 +684,7 @@ function renderRevenueChart(revenueData) {
             datasets: [{
                 label: 'Doanh thu (VNĐ)',
                 data: values,
-                backgroundColor: 'rgba(0, 86, 210, 0.8)',
+                backgroundColor: 'rgba(0, 86, 210, 0.9)',
                 borderColor: 'rgba(0, 86, 210, 1)',
                 borderWidth: 1,
                 borderRadius: 4
@@ -693,7 +719,7 @@ function renderRevenueChart(revenueData) {
 async function loadAdminCourses() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('admin_api.php/courses', {
+        const response = await fetch('admin_api.php/courses?t=' + new Date().getTime(), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -722,11 +748,11 @@ function renderAdminCourses() {
     adminCourses.forEach(course => {
         const imageUrl = getCourseImage(course.icon);
 
-        let html = `<div class="bg-white dark:bg-[#0B0F19] p-6 rounded-2xl border border-gray-200 dark:border-slate-800 mb-6">
+        let html = `<div class="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-gray-100 dark:border-slate-800 mb-6 shadow-sm">
             <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-4">
                     <input type="checkbox" value="${course.id}" class="courses-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('courses')">
-                    <div class="w-14 h-14 rounded-xl bg-cover bg-center border border-gray-200 dark:border-slate-700 shrink-0 shadow-sm" style="background-image: url('${imageUrl}')"></div>
+                    <div class="w-16 h-16 rounded-2xl bg-cover bg-center border border-gray-100 dark:border-slate-700 shrink-0 shadow-sm" style="background-image: url('${imageUrl}')"></div>
                     <h3 class="text-xl font-black text-[#0056D2] dark:text-blue-500">${course.title} <span class="text-xs font-semibold text-gray-500 ml-2">(${course.badge})</span></h3>
                 </div>
                 <div class="space-x-2 flex items-center">
@@ -781,10 +807,12 @@ function openCourseEditModal(courseId) {
     document.getElementById('upload-status').classList.add('hidden');
 
     document.getElementById('course-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('course-modal').classList.remove('opacity-0'), 10);
 }
 
 function closeCourseEditModal() {
-    document.getElementById('course-modal').classList.add('hidden');
+    document.getElementById('course-modal').classList.add('opacity-0');
+    setTimeout(() => document.getElementById('course-modal').classList.add('hidden'), 300);
 }
 
 async function handleCourseSubmit(event) {
@@ -864,10 +892,12 @@ function openAddCourseModal() {
     document.getElementById('add-course-form').reset();
     document.getElementById('add-upload-status').classList.add('hidden');
     document.getElementById('add-course-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('add-course-modal').classList.remove('opacity-0'), 10);
 }
 
 function closeAddCourseModal() {
-    document.getElementById('add-course-modal').classList.add('hidden');
+    document.getElementById('add-course-modal').classList.add('opacity-0');
+    setTimeout(() => document.getElementById('add-course-modal').classList.add('hidden'), 300);
 }
 
 async function handleAddCourseSubmit(event) {
@@ -1008,10 +1038,12 @@ function openLessonEditModal(courseId, weekId, lessonId) {
     document.getElementById('edit-lesson-flag').value = lesson.flag || '';
 
     document.getElementById('lesson-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('lesson-modal').classList.remove('opacity-0'), 10);
 }
 
 function closeLessonEditModal() {
-    document.getElementById('lesson-modal').classList.add('hidden');
+    document.getElementById('lesson-modal').classList.add('opacity-0');
+    setTimeout(() => document.getElementById('lesson-modal').classList.add('hidden'), 300);
 }
 
 async function handleLessonSubmit(event) {
@@ -1274,7 +1306,7 @@ async function deleteLesson(lessonId) {
 async function loadDiscounts() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     try {
-        const response = await fetch('admin_api.php/discounts', {
+        const response = await fetch('admin_api.php/discounts?t=' + new Date().getTime(), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -1315,8 +1347,12 @@ function renderDiscounts() {
 function openDiscountModal() {
     document.getElementById('discount-form').reset();
     document.getElementById('discount-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('discount-modal').classList.remove('opacity-0'), 10);
 }
-function closeDiscountModal() { document.getElementById('discount-modal').classList.add('hidden'); }
+function closeDiscountModal() { 
+    document.getElementById('discount-modal').classList.add('opacity-0');
+    setTimeout(() => document.getElementById('discount-modal').classList.add('hidden'), 300);
+}
 
 async function handleDiscountSubmit(event) {
     event.preventDefault();

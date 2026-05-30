@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi" class="dark">
+<html lang="vi" class="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,6 +12,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap" rel="stylesheet" />
   
   <link rel="stylesheet" href="coursera-style.css" />
+  
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#0B0F19] transition-colors duration-300 px-4 font-['Source_Sans_Pro'] py-10">
 
@@ -77,6 +79,18 @@
 
       <button id="submit-btn" type="submit" class="w-full bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm flex justify-center items-center mt-2">
         <span>Đăng ký ngay</span>
+      </button>
+
+      <div class="flex items-center gap-4 mt-4">
+        <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
+        <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">Hoặc</span>
+        <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
+      </div>
+
+      <!-- Nút Đăng nhập bằng Google -->
+      <button type="button" onclick="loginWithGoogle()" class="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm flex justify-center items-center gap-2">
+        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
+        Đăng ký bằng Google
       </button>
 
       <div id="status-msg" class="hidden mt-3 text-center text-sm font-bold"></div>
@@ -174,6 +188,49 @@
             statusMsg.classList.remove('hidden');
         }
     });
+
+    function loginWithGoogle() {
+      const clientId = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com"; // <-- THAY MÃ CLIENT ID CỦA BẠN VÀO ĐÂY SAU NHÉ
+      if (clientId.includes("YOUR_GOOGLE_CLIENT_ID_HERE")) {
+          alert("Nút Google đã hiển thị thành công! \n\nTuy nhiên, để chạy thật, bạn cần vào Google Cloud lấy Client ID thật và thay vào dòng chữ YOUR_GOOGLE_CLIENT_ID_HERE trong file register.html nhé.");
+          return;
+      }
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: handleGoogleLogin
+      });
+      google.accounts.id.prompt(); 
+    }
+
+    async function handleGoogleLogin(response) {
+      const btn = document.getElementById('submit-btn');
+      const statusMsg = document.getElementById('status-msg');
+      btn.disabled = true;
+      statusMsg.classList.remove('hidden', 'text-red-500', 'dark:text-red-400');
+      statusMsg.classList.add('text-blue-600', 'dark:text-blue-400');
+      statusMsg.innerText = "Đang xác thực Google...";
+
+      try {
+        const res = await fetch('login.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ google_token: response.credential })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, role: data.user.role, fullname: data.user.fullname }));
+          statusMsg.className = 'mt-3 text-center text-sm font-bold text-green-600 dark:text-green-400 block';
+          statusMsg.innerText = "Xác thực thành công! Đang chuyển hướng...";
+          setTimeout(() => window.location.href = (data.user.role === 'admin' || data.user.role === 'teacher') ? 'admin.html' : 'coursera-index.html', 1000);
+        } else {
+          throw new Error(data.message);
+        }
+      } catch (error) {
+        statusMsg.className = 'mt-3 text-center text-sm font-bold text-red-500 dark:text-red-400 block';
+        statusMsg.innerText = error.message || "Lỗi kết nối tới máy chủ.";
+        btn.disabled = false;
+      }
+    }
   </script>
 
 </body>
