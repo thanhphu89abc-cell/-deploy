@@ -13,7 +13,7 @@ register_shutdown_function(function() {
     }
 });
 
-require '../db_connect.php';
+require_once dirname(__DIR__) . '/db_connect.php';
 
 $data = json_decode(file_get_contents("php://input"));
 

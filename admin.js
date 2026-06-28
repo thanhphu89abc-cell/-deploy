@@ -126,8 +126,6 @@ async function loadOrders() {
       const data = await response.json();
       allOrders = data.orders;
       renderOrders();
-      
-      updateDashboardStats(); // Gọi cập nhật số liệu
 
     } catch (error) {
       console.error("Lỗi tải đơn hàng:", error);
@@ -412,7 +410,6 @@ async function loadUsers() {
         const data = await response.json();
         allUsers = data.users;
         renderUsers();
-        updateDashboardStats(); // Gọi cập nhật số liệu
     } catch (error) {
         console.error("Lỗi tải người dùng:", error);
     }
@@ -623,77 +620,83 @@ async function deleteSelectedUsers() {
     });
 }
 
-function switchAdminTab(tabName) {
-    const views = ['dashboard', 'orders', 'users', 'courses', 'discounts'];
-    views.forEach(v => {
-        const el = document.getElementById(`view-${v}`);
-        if(el) {
-            el.classList.add('hidden');
-            el.classList.remove('animate-fade');
-        }
-    });
-
-    const targetView = document.getElementById(`view-${tabName}`);
-    if(targetView) {
-        targetView.classList.remove('hidden');
-        targetView.classList.add('animate-fade');
-    }
-
-    document.querySelectorAll('#admin-nav a').forEach(a => {
-        a.classList.remove('bg-[#0056D2]', 'text-white', 'shadow-md', 'shadow-blue-500/20', 'bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
-        a.classList.add('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'text-gray-500', 'dark:text-gray-400');
-    });
-    const activeLink = document.querySelector(`#admin-nav a[data-tab="${tabName}"]`);
-    if(activeLink) {
-        activeLink.classList.add('bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
-        activeLink.classList.remove('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'hover:text-gray-900', 'dark:hover:text-white', 'text-gray-500', 'dark:text-gray-400');
-    }
-
-    if (tabName === 'dashboard') {
-        loadRevenueData();
-    }
-    if (tabName === 'orders') {
-        loadOrders();
-    }
-    if (tabName === 'users') {
-        loadUsers();
-    }
-    if (tabName === 'courses') {
-        loadAdminCourses();
-    }
-    if (tabName === 'discounts') {
-        loadDiscounts();
-    }
-}
-
-// Cập nhật các thẻ thống kê tổng quan
-function updateDashboardStats() {
-    const statOrders = document.getElementById('stat-orders');
-    const statUsers = document.getElementById('stat-users');
-    
-    if (statOrders) statOrders.innerText = allOrders.length;
-    if (statUsers) statUsers.innerText = allUsers.length;
-}
-
-async function loadRevenueData() {
+async function loadDashboardData() {
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     if (!token) return;
     try {
-        const response = await fetch('Api/admin_api.php/revenue?t=' + new Date().getTime(), {
+        const response = await fetch('Api/admin_api.php/dashboard-summary?t=' + new Date().getTime(), {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
         if (response.ok) {
-            renderRevenueChart(data.revenue);
-            
-            // Tính tổng doanh thu
-            const totalRev = data.revenue.reduce((sum, item) => sum + parseInt(item.total_revenue), 0);
-            const statRev = document.getElementById('stat-revenue');
-            if (statRev) statRev.innerText = totalRev.toLocaleString('vi-VN') + ' đ';
+            // 1. Update stat cards
+            document.getElementById('stat-revenue').innerText = Number(data.stats.revenue || 0).toLocaleString('vi-VN') + ' đ';
+            document.getElementById('stat-orders').innerText = data.stats.orders || 0;
+            document.getElementById('stat-users').innerText = data.stats.users || 0;
+
+            // 2. Render chart
+            renderRevenueChart(data.revenue_chart);
+
+            // 3. Render recent orders
+            renderDashboardRecentOrders(data.recent_orders);
+
+            // 4. Render new users
+            renderDashboardNewUsers(data.new_users);
         }
     } catch (error) {
-        console.error("Lỗi tải thống kê doanh thu:", error);
+        console.error("Lỗi tải dữ liệu dashboard:", error);
     }
+}
+
+function renderDashboardRecentOrders(orders) {
+    const container = document.getElementById('dashboard-recent-orders');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!orders || orders.length === 0) {
+        container.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-gray-400 font-semibold">Không có ghi danh nào gần đây.</td></tr>';
+        return;
+    }
+    orders.forEach(order => {
+        let statusHTML = '';
+        switch (parseInt(order.current_step)) {
+            case 1: statusHTML = `<span class="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-400">Chờ duyệt</span>`; break;
+            case 3: statusHTML = `<span class="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã duyệt</span>`; break;
+            case 4: statusHTML = `<span class="bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-400">Đã hủy</span>`; break;
+            default: statusHTML = `<span class="bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-300">N/A</span>`;
+        }
+        const courseTitle = adminCourses.find(c => c.id === order.course_name)?.title || order.course_name;
+
+        container.innerHTML += `
+            <tr class="hover:bg-gray-50/50 dark:hover:bg-slate-800/50">
+                <td class="p-3 font-bold text-gray-800 dark:text-gray-200">${order.user_fullname}</td>
+                <td class="p-3 text-gray-600 dark:text-gray-400 hidden sm:table-cell">${courseTitle}</td>
+                <td class="p-3 text-center"><span class="px-2 py-1 text-[10px] font-bold rounded-full">${statusHTML}</span></td>
+                <td class="p-3 text-right font-bold text-[#0056D2] dark:text-blue-400">${Number(order.price).toLocaleString('vi-VN')} đ</td>
+            </tr>
+        `;
+    });
+}
+
+function renderDashboardNewUsers(users) {
+    const container = document.getElementById('dashboard-new-users');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!users || users.length === 0) {
+        container.innerHTML = '<p class="p-8 text-center text-gray-400 font-semibold">Không có học viên mới.</p>';
+        return;
+    }
+    users.forEach(user => {
+        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(user.fullname)}&background=818cf8&color=fff&rounded=true&bold=true&size=40`;
+        container.innerHTML += `
+            <div class="flex items-center gap-4 p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800/50">
+                <img src="${avatarUrl}" alt="Avatar" class="w-10 h-10 rounded-full">
+                <div class="flex-1">
+                    <p class="font-bold text-sm text-gray-800 dark:text-gray-200">${user.fullname}</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">${user.email}</p>
+                </div>
+            </div>
+        `;
+    });
 }
 
 function renderRevenueChart(revenueData) {
@@ -744,6 +747,39 @@ function renderRevenueChart(revenueData) {
             }
         }
     });
+}
+
+function switchAdminTab(tabName) {
+    const views = ['dashboard', 'orders', 'users', 'courses', 'discounts'];
+    views.forEach(v => {
+        const el = document.getElementById(`view-${v}`);
+        if(el) {
+            el.classList.add('hidden');
+            el.classList.remove('animate-fade');
+        }
+    });
+
+    const targetView = document.getElementById(`view-${tabName}`);
+    if(targetView) {
+        targetView.classList.remove('hidden');
+        targetView.classList.add('animate-fade');
+    }
+
+    document.querySelectorAll('#admin-nav a').forEach(a => {
+        a.classList.remove('bg-[#0056D2]', 'text-white', 'shadow-md', 'shadow-blue-500/20', 'bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
+        a.classList.add('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'text-gray-500', 'dark:text-gray-400');
+    });
+    const activeLink = document.querySelector(`#admin-nav a[data-tab="${tabName}"]`);
+    if(activeLink) {
+        activeLink.classList.add('bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
+        activeLink.classList.remove('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'hover:text-gray-900', 'dark:hover:text-white', 'text-gray-500', 'dark:text-gray-400');
+    }
+
+    if (tabName === 'dashboard') loadDashboardData();
+    if (tabName === 'orders') loadOrders();
+    if (tabName === 'users') loadUsers();
+    if (tabName === 'courses') loadAdminCourses();
+    if (tabName === 'discounts') loadDiscounts();
 }
 
 async function loadAdminCourses() {

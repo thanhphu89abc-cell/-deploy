@@ -14,8 +14,7 @@ register_shutdown_function(function() {
 });
 
 /** @var mysqli $conn */
-require '../db_connect.php';
-if (file_exists('../vendor/autoload.php')) require_once '../vendor/autoload.php';
+require_once dirname(__DIR__) . '/db_connect.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -32,7 +31,8 @@ if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
 }
 try {
     $jwt = $matches[1];
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) throw new Exception("JWT Secret is not configured.");
     $decoded = JWT::decode($jwt, new Key($secret_key, 'HS256'));
     $user_id = $decoded->user_id;
 

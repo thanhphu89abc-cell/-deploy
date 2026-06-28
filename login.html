@@ -136,11 +136,7 @@
         const data = await response.json();
 
         if (response.ok) {
-          localStorage.setItem('coursera_user_session', JSON.stringify({
-            token: data.token,
-            role: data.user.role,
-            fullname: data.user.fullname
-          }));
+          localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, user: data.user }));
 
           if (data.user.role === 'admin' || data.user.role === 'teacher') {
             const audio = new Audio('sounds/ping.mp3');
@@ -195,9 +191,7 @@
         const data = await res.json();
 
         if (res.ok) {
-          localStorage.setItem('coursera_user_session', JSON.stringify({
-            token: data.token, role: data.user.role, fullname: data.user.fullname
-          }));
+          localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, user: data.user }));
 
           if (data.user.role === 'admin' || data.user.role === 'teacher') {
             const audio = new Audio('sounds/ping.mp3');

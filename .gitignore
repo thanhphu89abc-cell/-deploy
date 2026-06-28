@@ -1,6 +1,7 @@
+# Composer dependencies
 /vendor/
+# Environment variables file
 .env
-.vscode/
-uploads/
-Api/uploads/
-*.zip
+# User uploaded files
+# VSCode temp file
+tempCodeRunnerFile.php

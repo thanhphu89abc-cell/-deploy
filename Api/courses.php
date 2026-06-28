@@ -14,8 +14,7 @@ register_shutdown_function(function() {
 });
 
 /** @var mysqli $conn */
-require '../db_connect.php';
-if (file_exists('../vendor/autoload.php')) require_once '../vendor/autoload.php';
+require_once dirname(__DIR__) . '/db_connect.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -33,7 +32,8 @@ if (!preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
 
 try {
     $jwt = $matches[1];
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) throw new Exception("JWT Secret is not configured.");
     $decoded = JWT::decode($jwt, new Key($secret_key, 'HS256'));
     $user_id = $decoded->user_id;
 
@@ -62,50 +62,63 @@ try {
     }
 
     // 3. Lấy dữ liệu khóa học
+    $courses_res = $conn->query("SELECT * FROM courses");
+    if (!$courses_res) jsonResponse(["message" => "Lỗi CSDL (courses)"], 500);
     $courses = [];
-    $res_courses = $conn->query("SELECT * FROM courses");
-    
-    while ($c = $res_courses->fetch_assoc()) {
-        $course = [
-            "id" => $c['id'],
-            "title" => $c['title'],
-            "original_price" => $c['original_price'],
-            "price" => $c['price'],
-            "badge" => $c['badge'],
-            "color" => $c['color'],
-            "icon" => $c['icon'],
-            "lock_status" => in_array($c['id'], $unlocked_courses) ? "UNLOCKED" : "LOCKED",
-            "weeks" => []
-        ];
+    $course_map = [];
+    while ($c = $courses_res->fetch_assoc()) {
+        $c['weeks'] = [];
+        $c['lock_status'] = in_array($c['id'], $unlocked_courses) ? "UNLOCKED" : "LOCKED";
+        $courses[] = $c;
+        $course_map[$c['id']] = &$courses[count($courses) - 1];
+    }
+    $course_ids = array_keys($course_map);
 
-        $res_weeks = $conn->query("SELECT * FROM course_weeks WHERE course_id = '" . $conn->real_escape_string($c['id']) . "' ORDER BY week_number ASC");
-        while ($w = $res_weeks->fetch_assoc()) {
-            $week = [ "week_number" => $w['week_number'], "title" => $w['title'], "items" => [] ];
-
-            $res_lessons = $conn->query("SELECT * FROM lessons WHERE week_id = " . $w['id'] . " ORDER BY id ASC");
-            while ($l = $res_lessons->fetch_assoc()) {
-                $lesson = [
-                    "id" => (string)$l['id'],
-                    "type" => $l['type'],
-                    "title" => $l['title'],
-                    "duration" => $l['duration'],
-                    "videoSrc" => $l['video_url'],
-                    "description" => $l['description'],
-                    "completed" => in_array($l['id'], $completed_lessons),
-                    "quiz" => null
-                ];
-                if (!empty($l['quiz_question'])) {
-                    $lesson['quiz'] = [
-                        "question" => $l['quiz_question'],
-                        "options" => [ ["v" => "a", "t" => $l['quiz_option_a']], ["v" => "b", "t" => $l['quiz_option_b']] ],
-                        "correct" => $l['quiz_correct_answer']
-                    ];
-                }
-                $week['items'][] = $lesson;
-            }
-            $course['weeks'][] = $week;
+    if (!empty($course_ids)) {
+        $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
+        $types = str_repeat('s', count($course_ids));
+        
+        $weeks_stmt = $conn->prepare("SELECT * FROM course_weeks WHERE course_id IN ($placeholders) ORDER BY week_number ASC");
+        $weeks_stmt->bind_param($types, ...$course_ids);
+        $weeks_stmt->execute();
+        $weeks_res = $weeks_stmt->get_result();
+        $week_map = [];
+        while ($w = $weeks_res->fetch_assoc()) {
+            $w['items'] = [];
+            $week_map[$w['id']] = $w;
         }
-        $courses[] = $course;
+        $week_ids = array_keys($week_map);
+
+        if (!empty($week_ids)) {
+            $placeholders_lessons = implode(',', array_fill(0, count($week_ids), '?'));
+            $types_lessons = str_repeat('i', count($week_ids));
+            $lessons_stmt = $conn->prepare("SELECT * FROM lessons WHERE week_id IN ($placeholders_lessons) ORDER BY id ASC");
+            $lessons_stmt->bind_param($types_lessons, ...$week_ids);
+            $lessons_stmt->execute();
+            $lessons_res = $lessons_stmt->get_result();
+            while ($l = $lessons_res->fetch_assoc()) {
+                if (isset($week_map[$l['week_id']])) {
+                    $lesson = [
+                        "id" => (string)$l['id'], "type" => $l['type'], "title" => $l['title'],
+                        "duration" => $l['duration'], "videoSrc" => $l['video_url'], "description" => $l['description'],
+                        "completed" => in_array($l['id'], $completed_lessons), "quiz" => null
+                    ];
+                    if (!empty($l['quiz_question'])) {
+                        $lesson['quiz'] = [
+                            "question" => $l['quiz_question'],
+                            "options" => [ ["v" => "a", "t" => $l['quiz_option_a']], ["v" => "b", "t" => $l['quiz_option_b']] ],
+                            "correct" => $l['quiz_correct_answer']
+                        ];
+                    }
+                    $week_map[$l['week_id']]['items'][] = $lesson;
+                }
+            }
+        }
+        foreach ($week_map as $week) {
+            if (isset($course_map[$week['course_id']])) {
+                $course_map[$week['course_id']]['weeks'][] = $week;
+            }
+        }
     }
     echo json_encode(["courses" => $courses]);
 } catch (Exception $e) {

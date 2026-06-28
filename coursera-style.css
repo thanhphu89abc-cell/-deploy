@@ -122,3 +122,20 @@
 .group:hover .animate-marquee-fast {
     animation-play-state: paused;
 }
+
+/* Hiệu ứng chuyển tab mượt mà */
+.tab-pane {
+    transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+    opacity: 0;
+    transform: translateY(10px);
+    position: absolute;
+    width: 100%;
+    pointer-events: none;
+}
+
+.tab-pane.active {
+    opacity: 1;
+    transform: translateY(0);
+    position: relative;
+    pointer-events: auto;
+}

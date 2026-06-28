@@ -13,10 +13,18 @@ register_shutdown_function(function() {
     }
 });
 
-require '../db_connect.php';
-if (file_exists('../vendor/autoload.php')) require_once '../vendor/autoload.php';
+require_once dirname(__DIR__) . '/db_connect.php';
+// Sử dụng thư viện JWT đã có
+use Firebase\JWT\JWT;
 
 header('Content-Type: application/json; charset=utf-8');
+
+function jsonResponse($data, $status = 200) {
+    if (ob_get_level()) ob_clean();
+    http_response_code($status);
+    echo json_encode($data, JSON_UNESCAPED_UNICODE);
+    exit();
+}
 
 $data = json_decode(file_get_contents("php://input"));
 
@@ -91,7 +99,9 @@ if (isset($data->google_token)) {
     }
     
     // Tạo JWT Token cho hệ thống của bạn
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
+
     $payload = [
         'user_id' => $user['id'],
         'email' => $user['email'],
@@ -99,12 +109,7 @@ if (isset($data->google_token)) {
         'exp' => time() + (24 * 60 * 60)
     ];
 
-    $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode(['alg' => 'HS256', 'typ' => 'JWT'])));
-    $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
-    $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret_key, true);
-    $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-    $jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-
+    $jwt = JWT::encode($payload, $secret_key, 'HS256');
     if (ob_get_level()) ob_clean();
     http_response_code(200);
     echo json_encode([
@@ -138,20 +143,7 @@ $result = $stmt->get_result();
 if ($result->num_rows > 0) {
     $user = $result->fetch_assoc();
     
-    // Tự động thêm cột vào Database nếu chưa có
-    if (!array_key_exists('failed_attempts', $user)) {
-        $conn->query("ALTER TABLE users ADD COLUMN failed_attempts INT DEFAULT 0");
-        $conn->query("ALTER TABLE users ADD COLUMN locked_until DATETIME NULL");
-        $user['failed_attempts'] = 0;
-        $user['locked_until'] = null;
-    }
-
-    if (!array_key_exists('is_blocked', $user)) {
-        $conn->query("ALTER TABLE users ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
-        $user['is_blocked'] = 0;
-    }
-
-    if ($user['is_blocked'] == 1) {
+    if (isset($user['is_blocked']) && $user['is_blocked'] == 1) {
         if (ob_get_level()) ob_clean();
         http_response_code(403);
         echo json_encode(["message" => "Tài khoản của bạn đã bị khóa do vi phạm chính sách! Vui lòng liên hệ Admin."]);
@@ -159,7 +151,7 @@ if ($result->num_rows > 0) {
     }
 
     // Kiểm tra xem tài khoản có đang bị khóa không
-    if ($user['locked_until'] && strtotime($user['locked_until']) > time()) {
+    if (isset($user['locked_until']) && $user['locked_until'] && strtotime($user['locked_until']) > time()) {
         if (ob_get_level()) ob_clean();
         http_response_code(403);
         $remaining_mins = ceil((strtotime($user['locked_until']) - time()) / 60);
@@ -169,12 +161,13 @@ if ($result->num_rows > 0) {
 
     // Xác thực mật khẩu
     if (password_verify($password, $user['password_hash'])) {
-        // Reset số lần nhập sai khi đăng nhập thành công
+        // Reset số lần nhập sai khi đăng nhập thành công (nếu các cột đó tồn tại)
         if ($user['failed_attempts'] > 0 || $user['locked_until']) {
             $conn->query("UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = " . $user['id']);
         }
 
-        $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+        $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+        if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
         
         $payload = [
             'user_id' => $user['id'],
@@ -183,13 +176,7 @@ if ($result->num_rows > 0) {
             'exp' => time() + (24 * 60 * 60) // Token hết hạn sau 24 giờ
         ];
 
-        // Tạo JWT thuần bằng PHP không cần thư viện ngoài
-        $base64UrlHeader = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode(['alg' => 'HS256', 'typ' => 'JWT'])));
-        $base64UrlPayload = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode(json_encode($payload)));
-        $signature = hash_hmac('sha256', $base64UrlHeader . "." . $base64UrlPayload, $secret_key, true);
-        $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
-        $jwt = $base64UrlHeader . "." . $base64UrlPayload . "." . $base64UrlSignature;
-
+        $jwt = JWT::encode($payload, $secret_key, 'HS256');
         if (ob_get_level()) ob_clean();
         http_response_code(200);
         echo json_encode([
@@ -203,7 +190,7 @@ if ($result->num_rows > 0) {
         ]);
     } else {
         // Xử lý khi nhập sai mật khẩu
-        $attempts = $user['failed_attempts'] + 1;
+        $attempts = (isset($user['failed_attempts']) ? $user['failed_attempts'] : 0) + 1;
         if ($attempts >= 5) {
             // Khóa tài khoản 15 phút
             $conn->query("UPDATE users SET failed_attempts = $attempts, locked_until = DATE_ADD(NOW(), INTERVAL 15 MINUTE) WHERE id = " . $user['id']);

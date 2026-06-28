@@ -18,6 +18,31 @@ if (file_exists($autoload_path)) {
     }
 }
 
+// [FALLBACK] Nếu thư viện Dotenv không tồn tại, tự đọc file .env
+if (empty($_ENV) && file_exists(__DIR__ . '/.env')) {
+    $lines = file(__DIR__ . '/.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (strpos(trim($line), '#') === 0) {
+            continue;
+        }
+
+        if (strpos($line, '=') !== false) {
+            list($name, $value) = explode('=', $line, 2);
+            $name = trim($name);
+            $value = trim(trim($value), '"'); // Trim whitespace then quotes
+            $_ENV[$name] = $value;
+        }
+    }
+}
+
+// [FIX] Bắt buộc kiểm tra cấu hình an ninh
+if (empty($_ENV['JWT_SECRET_KEY'])) {
+    http_response_code(500);
+    die(json_encode([
+        "message" => "LỖI CẤU HÌNH NGHIÊM TRỌNG: JWT_SECRET_KEY chưa được thiết lập. Vui lòng sao chép file '.env.example' thành file '.env' và đảm bảo bạn đã điền đầy đủ thông tin."
+    ]));
+}
+
 $host = $_ENV['DB_HOST'] ?? 'localhost';
 $user = $_ENV['DB_USER'] ?? 'root';
 $password = $_ENV['DB_PASS'] ?? '';

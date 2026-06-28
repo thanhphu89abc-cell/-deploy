@@ -28,26 +28,24 @@ const App = {
             this.renderSkeletonCards(8);
 
             // Bắt đầu tải dữ liệu thật
-            await this.checkAuth();
+            await this.checkAuth(); // Hàm này giờ sẽ chạy nhanh hơn
             await this.loadData();
-
-            // Tải thông báo cá nhân
-            this.loadNotifications();
-
-            // Render dữ liệu thật (sẽ thay thế skeleton)
-            this.updateUserInfoDisplay();
+            await this.loadNotifications();
+            // this.updateUserInfoDisplay(); // Đã được gọi sớm hơn trong checkAuth
             this.renderCategoryDropdown();
-
-            // Khôi phục trạng thái trang (Giữ nguyên trang Học khi tải lại)
             this.restorePageState();
 
-            // Bắt đầu Polling kiểm tra trạng thái đơn hàng (Mỗi 10 giây)
             setInterval(() => this.pollOrderUpdates(), 10000);
+
+            // Chỉ ẩn loader khi mọi thứ đã thành công
+            this.hidePageLoader();
         } catch (error) {
             console.error("Lỗi khởi tạo hệ thống:", error);
-        } finally {
-            // Luôn ẩn màn hình loading dù có lỗi xảy ra để không làm treo trang
-            this.hidePageLoader();
+            // Nếu có lỗi xác thực, dọn dẹp và chuyển hướng
+            localStorage.removeItem("coursera_user_session");
+            this.showToast(error.message || "Phiên đăng nhập không hợp lệ. Đang chuyển hướng...", "error");
+            // Không ẩn loader, để người dùng biết trang đang chuyển hướng
+            setTimeout(() => window.location.href = "login.html", 1500);
         }
     },
 
@@ -121,25 +119,25 @@ const App = {
         } catch (e) {
             session = null;
         }
-        if (!session || !session.token) {
-            this.showToast("Phiên đăng nhập không hợp lệ hoặc đã hết hạn. Vui lòng đăng nhập lại.", "error");
-            setTimeout(() => window.location.href = "login.html", 1500);
+        if (!session || !session.token || !session.user) {
             throw new Error("Chưa đăng nhập");
         }
         this.state.token = session.token;
-        try {
-            const res = await fetch("dashboard.php", {
-                headers: { Authorization: `Bearer ${this.state.token}` },
-            });
-            if (!res.ok) throw new Error("Failed to fetch user data");
-            const data = await res.json();
-            this.state.user = data.user;
-            this.state.orders = data.orders;
-        } catch (e) {
-            console.error("Lỗi xác thực:", e);
-            localStorage.removeItem("coursera_user_session");
-            window.location.href = "login.html";
+        this.state.user = session.user; // Sử dụng dữ liệu người dùng từ localStorage trước
+        this.updateUserInfoDisplay(); // Cập nhật giao diện ngay lập tức
+
+        const res = await fetch("dashboard.php", {
+            headers: { Authorization: `Bearer ${this.state.token}` },
+        });
+
+        if (!res.ok) {
+            // Nếu token hết hạn, lỗi sẽ được bắt ở khối catch của hàm init()
+            throw new Error("Token không hợp lệ hoặc đã hết hạn");
         }
+        const data = await res.json();
+        this.state.user = data.user; // Cập nhật lại với dữ liệu mới nhất từ server
+        this.state.orders = data.orders; // Cập nhật đơn hàng
+        this.updateUserInfoDisplay(); // Cập nhật lại giao diện với dữ liệu mới nhất (nếu có thay đổi)
     },
 
     async pollOrderUpdates() {
@@ -207,39 +205,36 @@ const App = {
         }
     },
 
-    loadNotifications() {
-        const stored = localStorage.getItem(`coursera_notifications_${this.state.user?.email}`);
-        if (stored) {
-            this.state.notifications = JSON.parse(stored);
-        } else {
+    async loadNotifications() {
+        try {
+            const res = await fetch("student_api.php/notifications", {
+                headers: { Authorization: `Bearer ${this.state.token}` },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                this.state.notifications = data;
+            } else {
+                this.state.notifications = [];
+            }
+        } catch (e) {
+            console.error("Lỗi tải thông báo:", e);
             this.state.notifications = [];
         }
         this.renderNotifications();
     },
 
-    saveNotifications() {
-        if (this.state.user) {
-            localStorage.setItem(`coursera_notifications_${this.state.user.email}`, JSON.stringify(this.state.notifications));
+    async markAllNotificationsRead() {
+        try {
+            await fetch("student_api.php/notifications/mark-read", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${this.state.token}` },
+            });
+            this.state.notifications.forEach(n => n.read = true); // Cập nhật giao diện ngay
+            this.renderNotifications();
+        } catch (e) {
+            console.error("Lỗi đánh dấu đã đọc:", e);
+            this.showToast("Không thể cập nhật trạng thái thông báo.", "error");
         }
-    },
-
-    addNotification(title, message, courseId = null) {
-        this.state.notifications.unshift({
-            id: Date.now(),
-            title,
-            message,
-            courseId,
-            read: false,
-            date: new Date().toLocaleString('vi-VN')
-        });
-        this.saveNotifications();
-        this.renderNotifications();
-    },
-
-    markAllNotificationsRead() {
-        this.state.notifications.forEach(n => n.read = true);
-        this.saveNotifications();
-        this.renderNotifications();
     },
 
     renderNotifications() {
@@ -267,16 +262,31 @@ const App = {
             const clickAction = n.courseId ? `onclick="App.showLearningView('${n.courseId}', false)"` : '';
             const cursorClass = n.courseId ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50' : '';
             
-            list.innerHTML += `
-                <div class="p-3 border-b border-gray-100 dark:border-slate-700/50 flex items-start gap-3 ${bgClass} ${cursorClass} transition-colors" ${clickAction}>
-                    ${dot}
-                    <div class="flex-1">
-                        <h4 class="text-sm font-bold text-gray-900 dark:text-white leading-tight">${n.title}</h4>
-                        <p class="text-[12px] text-gray-600 dark:text-gray-300 mt-1 font-medium">${n.message}</p>
-                        <span class="text-[10px] text-gray-400 mt-1.5 block">${n.date}</span>
-                    </div>
-                </div>
-            `;
+            const notificationEl = document.createElement('div');
+            notificationEl.className = `p-3 border-b border-gray-100 dark:border-slate-700/50 flex items-start gap-3 ${bgClass} ${cursorClass} transition-colors`;
+            if (n.courseId) {
+                notificationEl.onclick = () => App.showLearningView(n.courseId, false);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'flex-1';
+
+            const titleEl = document.createElement('h4');
+            titleEl.className = 'text-sm font-bold text-gray-900 dark:text-white leading-tight';
+            titleEl.textContent = n.title; // Sử dụng textContent thay vì innerHTML
+
+            const messageEl = document.createElement('p');
+            messageEl.className = 'text-[12px] text-gray-600 dark:text-gray-300 mt-1 font-medium';
+            messageEl.innerHTML = n.message; // Giữ lại innerHTML nếu message có chứa HTML an toàn (như <span>)
+
+            const dateEl = document.createElement('span');
+            dateEl.className = 'text-[10px] text-gray-400 mt-1.5 block';
+            dateEl.textContent = n.date;
+
+            contentDiv.append(titleEl, messageEl, dateEl);
+            notificationEl.innerHTML = dot; // Giữ lại dot vì nó là HTML an toàn do chúng ta tạo ra
+            notificationEl.appendChild(contentDiv);
+            list.appendChild(notificationEl);
         });
     },
 
@@ -574,6 +584,12 @@ const App = {
          showCatalogView() {
              this.state.activeView = "dashboard";
              this.state.currentPage = 1;
+
+        // [FIX] Dừng video đang phát trước khi chuyển view để tránh lỗi âm thanh chạy nền
+        if (this.dom.videoWrapper) {
+            this.dom.videoWrapper.innerHTML = "";
+        }
+
         sessionStorage.setItem('coursera_page_state', JSON.stringify({ view: 'dashboard' }));
              this.dom.dashboardView.classList.remove("hidden");
              this.dom.learningView.classList.add("hidden");
@@ -1035,29 +1051,34 @@ const App = {
     },
 
     switchTab(tabId) {
-        this.dom.tabContents.forEach((el) => el.classList.add("hidden"));
-        this.dom.tabButtons.forEach((el) =>
+        // Ẩn tất cả các tab content
+        this.dom.tabContents.forEach((el) => el.classList.remove("active"));
+
+        // Reset style của tất cả các nút tab
+        this.dom.tabButtons.forEach((el) => {
             el.classList.remove(
                 "border-[#0056D2]",
                 "text-[#0056D2]",
                 "dark:text-blue-400",
-            ),
-        );
-        this.dom.tabButtons.forEach((el) =>
-            el.classList.add("border-transparent", "text-gray-500"),
-        );
+                "font-bold",
+            );
+            el.classList.add("border-transparent", "text-gray-500", "font-semibold");
+        });
 
-        document.getElementById(`tab-content-${tabId}`)?.classList.remove("hidden");
-        document
-            .getElementById(`tab-btn-${tabId}`)
-            ?.classList.add(
+        // Hiển thị tab content được chọn với hiệu ứng
+        document.getElementById(`tab-content-${tabId}`)?.classList.add("active");
+
+        // Kích hoạt style cho nút tab được chọn
+        const targetButton = document.getElementById(`tab-btn-${tabId}`);
+        if (targetButton) {
+            targetButton.classList.add(
                 "border-[#0056D2]",
                 "text-[#0056D2]",
                 "dark:text-blue-400",
+                "font-bold",
             );
-        document
-            .getElementById(`tab-btn-${tabId}`)
-            ?.classList.remove("border-transparent", "text-gray-500");
+            targetButton.classList.remove("border-transparent", "text-gray-500", "font-semibold");
+        }
     },
 
     renderQuiz(quizData) {
@@ -1238,7 +1259,7 @@ const App = {
             // Gửi lệnh lên Backend để chạy Docker thật
             try {
                 this.dom.terminalInput.disabled = true;
-                const res = await fetch("Api/student_api.php/terminal", {
+                const res = await fetch("student_api.php/terminal", {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
@@ -1923,7 +1944,7 @@ async function openAccountModal(targetSubTab = "profile") {
     if (!modal || !App.state.user) return;
 
     // 1. Điền thông tin người dùng vào tab Hồ sơ
-    document.getElementById("md-user-name").innerText = App.state.user.fullname;
+    document.getElementById("md-fullname-input").value = App.state.user.fullname;
     document.getElementById("md-user-email").innerText = App.state.user.email;
     document.getElementById("md-user-date").innerText = App.state.user.created_at;
 
@@ -2095,6 +2116,55 @@ async function handleModalChangePassword(event) {
     } finally {
         btn.disabled = false;
         btn.innerText = "Cập nhật";
+    }
+}
+
+async function handleModalUpdateProfile(event) {
+    event.preventDefault();
+    const fullname = document.getElementById("md-fullname-input").value;
+    const btn = document.getElementById("md-profile-btn");
+    const msg = document.getElementById("md-profile-msg");
+
+    msg.classList.add("hidden");
+
+    if (!fullname.trim()) {
+        msg.innerText = "Họ và tên không được để trống!";
+        msg.className = "text-xs font-bold mt-2 text-red-500 dark:text-red-400 block";
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Đang lưu...`;
+
+    try {
+        const res = await fetch("student_api.php/user/profile", {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${App.state.token}`,
+            },
+            body: JSON.stringify({ fullname: fullname }),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            msg.innerText = data.message || "Cập nhật thành công!";
+            msg.className = "text-xs font-bold mt-2 text-green-600 dark:text-green-400 block";
+            
+            localStorage.setItem("coursera_user_session", JSON.stringify({ token: data.new_token, user: data.user }));
+            App.state.token = data.new_token;
+            App.state.user = data.user;
+            App.updateUserInfoDisplay();
+        } else {
+            msg.innerText = data.message || "Có lỗi xảy ra.";
+            msg.className = "text-xs font-bold mt-2 text-red-500 dark:text-red-400 block";
+        }
+    } catch (e) {
+        msg.innerText = "Lỗi kết nối tới máy chủ.";
+        msg.className = "text-xs font-bold mt-2 text-red-500 dark:text-red-400 block";
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-save"></i> Lưu thay đổi`;
     }
 }
 

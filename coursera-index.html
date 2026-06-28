@@ -11,9 +11,7 @@
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link href="https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="coursera-style.css?v=1011" />
     <link rel="stylesheet" href="coursera-style.css?v=1012" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   </head>
   <body class="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-gray-900 dark:text-gray-100 transition-colors duration-300">
     
@@ -416,53 +414,54 @@
                     <button id="tab-btn-notes" onclick="App.switchTab('notes')" class="pb-3 border-b-2 border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-300 font-semibold text-sm transition-colors flex items-center gap-1.5"><i class="fa-solid fa-pen-to-square"></i> Ghi chú cá nhân</button>
                   </div>
 
-                  <div id="tab-content-slides" class="block animate-fade">
-                    <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 text-center aspect-video flex flex-col justify-center items-center">
-                      <i class="fa-solid fa-file-shield text-6xl text-[#0056D2] mb-4 opacity-80 animate-bounce"></i>
-                      <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2">Tài nguyên học thuật chuẩn hóa</h3>
-                      <p class="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-md">Bản trình bày phân tích chuyên sâu về kiến trúc hệ thống và biểu đồ véc-tơ tấn công.</p>
-                      <button onclick="App.downloadPdf()" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-md flex items-center gap-2"><i class="fa-solid fa-download"></i> Tải báo cáo PDF an toàn</button>
+                  <div id="tabs-wrapper" class="relative min-h-[300px]">
+                    <div id="tab-content-slides" class="tab-pane active">
+                      <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-8 text-center aspect-video flex flex-col justify-center items-center">
+                        <i class="fa-solid fa-file-shield text-6xl text-[#0056D2] mb-4 opacity-80 animate-bounce"></i>
+                        <h3 class="text-lg font-black text-gray-900 dark:text-white mb-2">Tài nguyên học thuật chuẩn hóa</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-5 max-w-md">Bản trình bày phân tích chuyên sâu về kiến trúc hệ thống và biểu đồ véc-tơ tấn công.</p>
+                        <button onclick="App.downloadPdf()" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-md flex items-center gap-2"><i class="fa-solid fa-download"></i> Tải báo cáo PDF an toàn</button>
+                      </div>
                     </div>
-                  </div>
 
-                  <div id="tab-content-quiz" class="hidden">
-                    <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 mt-2">
-                      <div class="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-700 pb-4">
-                        <div>
-                          <h3 class="text-lg font-black text-gray-900 dark:text-white">Kiểm tra chuyên môn (Quiz)</h3>
-                          <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Hoàn thành bài trắc nghiệm hệ thống để cập nhật chứng nhận tiến trình.</p>
+                    <div id="tab-content-quiz" class="tab-pane">
+                      <div class="bg-gray-50 dark:bg-slate-800/50 rounded-2xl border border-gray-200 dark:border-slate-700/50 p-6 mt-2">
+                        <div class="flex items-center justify-between mb-6 border-b border-gray-200 dark:border-slate-700 pb-4">
+                          <div>
+                            <h3 class="text-lg font-black text-gray-900 dark:text-white">Kiểm tra chuyên môn (Quiz)</h3>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Hoàn thành bài trắc nghiệm hệ thống để cập nhật chứng nhận tiến trình.</p>
+                          </div>
                         </div>
-                      </div>
-                      <div class="space-y-6" id="quiz-container">
-                        <div class="quiz-question">
-                          <p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3" id="quiz-question-text">Đang đồng bộ truy vấn...</p>
-                          <div class="space-y-2" id="quiz-options-wrapper"></div>
+                        <div class="space-y-6" id="quiz-container">
+                          <div class="quiz-question">
+                            <p class="text-sm font-bold text-gray-800 dark:text-gray-200 mb-3" id="quiz-question-text">Đang đồng bộ truy vấn...</p>
+                            <div class="space-y-2" id="quiz-options-wrapper"></div>
+                          </div>
                         </div>
+                        <button onclick="App.submitQuiz()" class="mt-6 bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-server text-xs"></i> Gửi dữ liệu xác thực</button>
+                        <div id="quiz-result" class="mt-4 hidden text-sm font-bold p-3.5 rounded-xl border"></div>
                       </div>
-                      <button onclick="App.submitQuiz()" class="mt-6 bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition-colors shadow-sm flex items-center gap-1.5"><i class="fa-solid fa-server text-xs"></i> Gửi dữ liệu xác thực</button>
-                      <div id="quiz-result" class="mt-4 hidden text-sm font-bold p-3.5 rounded-xl border"></div>
                     </div>
-                  </div>
 
-                  <div id="tab-content-desc" class="hidden"><p class="text-base text-gray-600 dark:text-gray-300 font-medium leading-relaxed" id="lesson-main-desc">Đang phân tích...</p></div>
-                  
-                  <div id="tab-content-resources" class="hidden">
-                    <div class="p-5 border border-dashed border-gray-300 dark:border-slate-700 rounded-xl bg-gray-50/50 dark:bg-slate-800/30 text-center">
-                      <i class="fa-solid fa-folder-tree text-4xl text-gray-400 mb-3"></i>
-                      <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Không có tệp lệnh phụ trợ đính kèm cho session này.</p>
-                    </div>
-                  </div>
-
-                  <div id="tab-content-notes" class="hidden animate-fade">
-                    <div class="bg-yellow-50/50 dark:bg-yellow-900/10 rounded-2xl border border-yellow-200/50 dark:border-yellow-700/30 p-6 shadow-inner">
-                      <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-pen-clip text-yellow-500"></i> Ghi chú bài học</h3>
-                        <span class="text-[10px] font-bold text-gray-400 bg-white dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-slate-700"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> Tự động lưu</span>
+                    <div id="tab-content-desc" class="tab-pane"><p class="text-base text-gray-600 dark:text-gray-300 font-medium leading-relaxed" id="lesson-main-desc">Đang phân tích...</p></div>
+                    
+                    <div id="tab-content-resources" class="tab-pane">
+                      <div class="p-5 border border-dashed border-gray-300 dark:border-slate-700 rounded-xl bg-gray-50/50 dark:bg-slate-800/30 text-center">
+                        <i class="fa-solid fa-folder-tree text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-sm font-semibold text-gray-600 dark:text-gray-400">Không có tệp lệnh phụ trợ đính kèm cho session này.</p>
                       </div>
-                      <textarea id="lesson-smart-notes" oninput="App.saveSmartNotes()" rows="6" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-700/50 rounded-xl outline-none text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-400/30 resize-y" placeholder="Ghi chú lại những kiến thức quan trọng, câu lệnh (command) hoặc đoạn code hay tại đây..."></textarea>
+                    </div>
+
+                    <div id="tab-content-notes" class="tab-pane">
+                      <div class="bg-yellow-50/50 dark:bg-yellow-900/10 rounded-2xl border border-yellow-200/50 dark:border-yellow-700/30 p-6 shadow-inner">
+                        <div class="flex items-center justify-between mb-4">
+                          <h3 class="text-sm font-black text-gray-900 dark:text-white flex items-center gap-2"><i class="fa-solid fa-pen-clip text-yellow-500"></i> Ghi chú bài học</h3>
+                          <span class="text-[10px] font-bold text-gray-400 bg-white dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-gray-100 dark:border-slate-700"><i class="fa-solid fa-cloud-arrow-up mr-1"></i> Tự động lưu</span>
+                        </div>
+                        <textarea id="lesson-smart-notes" oninput="App.saveSmartNotes()" rows="6" class="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-700/50 rounded-xl outline-none text-sm text-gray-800 dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-yellow-400/30 resize-y" placeholder="Ghi chú lại những kiến thức quan trọng, câu lệnh (command) hoặc đoạn code hay tại đây..."></textarea>
+                      </div>
                     </div>
                   </div>
-
                 </div>
               </div>
             </div>
@@ -586,29 +585,31 @@
           </div>
           <div class="flex-1 p-6 md:p-8 lg:p-10 overflow-y-auto min-h-0 text-sm">
             <div id="subtab-content-profile" class="block space-y-6 animate-fade">
-              <h4 class="font-black text-gray-900 dark:text-white text-lg mb-2">Thông tin học viên</h4>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
-                  <div class="w-10 h-10 bg-blue-50 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300"><i class="fa-solid fa-user"></i></div>
-                  <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Họ và tên</p>
-                  <p id="md-user-name" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p>
+              <form id="md-profile-form" onsubmit="handleModalUpdateProfile(event)" class="space-y-6">
+                <h4 class="font-black text-gray-900 dark:text-white text-lg mb-2">Thông tin học viên</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div class="w-10 h-10 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full flex items-center justify-center mb-3"><i class="fa-solid fa-envelope"></i></div>
+                    <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Email tài khoản (Không thể đổi)</p>
+                    <p id="md-user-email" class="font-bold text-gray-800 dark:text-gray-200 text-base truncate">---</p>
+                  </div>
+                  <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+                    <div class="w-10 h-10 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mb-3"><i class="fa-solid fa-calendar-days"></i></div>
+                    <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày gia nhập</p>
+                    <p id="md-user-date" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p>
+                  </div>
                 </div>
-                <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
-                  <div class="w-10 h-10 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300"><i class="fa-solid fa-envelope"></i></div>
-                  <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Email tài khoản</p>
-                  <p id="md-user-email" class="font-bold text-gray-800 dark:text-gray-200 text-base truncate">---</p>
+                <div class="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm">
+                  <label for="md-fullname-input" class="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wide">Cập nhật họ và tên</label>
+                  <div class="flex gap-3">
+                    <input id="md-fullname-input" type="text" class="flex-1 px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-[#0056D2]/20 focus:border-[#0056D2] outline-none transition-all" required>
+                    <button type="submit" id="md-profile-btn" class="bg-[#0056D2] hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2">
+                      <i class="fa-solid fa-save"></i> Lưu thay đổi
+                    </button>
+                  </div>
+                  <p id="md-profile-msg" class="text-xs font-bold hidden mt-3"></p>
                 </div>
-                <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
-                  <div class="w-10 h-10 bg-yellow-50 dark:bg-yellow-900/30 text-yellow-500 dark:text-yellow-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:rotate-3 transition-transform duration-300"><i class="fa-solid fa-medal"></i></div>
-                  <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Cấp bậc (Rank)</p>
-                  <p id="md-user-rank" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
-                  <div class="w-10 h-10 bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 group-hover:-rotate-3 transition-transform duration-300"><i class="fa-solid fa-calendar-days"></i></div>
-                  <p class="text-[11px] text-gray-400 font-bold uppercase tracking-wider mb-1">Ngày gia nhập</p>
-                  <p id="md-user-date" class="font-bold text-gray-800 dark:text-gray-200 text-base">---</p>
-                </div>
-              </div>
+              </form>
             </div>
             <form id="md-password-form" onsubmit="handleModalChangePassword(event)" class="hidden space-y-4 animate-fade">
               <h4 class="font-black text-gray-900 dark:text-white text-lg mb-2">Đổi mật khẩu</h4>
@@ -685,8 +686,7 @@
       }
     </script>
 
-    <script src="coursera-script.js?v=1018"></script>
-    <script src="coursera-script.js?v=1019"></script>
+    <script src="coursera-script.js?v=1020"></script>
 
   </body>
 </html>

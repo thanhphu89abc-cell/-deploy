@@ -93,6 +93,41 @@
           <h3 class="text-lg font-black text-gray-900 dark:text-white mb-6">Biểu đồ doanh thu</h3>
           <canvas id="revenueChart" class="w-full max-h-[400px]"></canvas>
         </div>
+
+        <!-- Recent Activity Grids -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+          <!-- Recent Orders -->
+          <div class="lg:col-span-2 bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-black text-gray-900 dark:text-white">Ghi danh gần đây</h3>
+              <a href="#" onclick="switchAdminTab('orders')" class="text-xs font-bold text-[#0056D2] dark:text-blue-400 hover:underline">Xem tất cả <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="text-xs text-gray-500 dark:text-gray-400 uppercase font-black tracking-wider">
+                        <tr>
+                            <th class="p-3 text-left">Học viên</th>
+                            <th class="p-3 text-left hidden sm:table-cell">Khóa học</th>
+                            <th class="p-3 text-center">Trạng thái</th>
+                            <th class="p-3 text-right">Giá</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboard-recent-orders" class="divide-y divide-gray-100 dark:divide-slate-800">
+                        <!-- JS will render this -->
+                        <tr><td colspan="4" class="p-4 text-center text-gray-400">Đang tải...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+          </div>
+          <!-- New Users -->
+          <div class="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-none">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-black text-gray-900 dark:text-white">Học viên mới</h3>
+              <a href="#" onclick="switchAdminTab('users')" class="text-xs font-bold text-[#0056D2] dark:text-blue-400 hover:underline">Xem tất cả <i class="fa-solid fa-arrow-right"></i></a>
+            </div>
+            <div id="dashboard-new-users" class="space-y-3"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Orders View -->

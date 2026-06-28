@@ -147,7 +147,8 @@ try {
      */
     $jwt = $matches[1];
 
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) throw new Exception("JWT Secret is not configured.");
 
     $decoded = JWT::decode(
         $jwt,
@@ -207,7 +208,7 @@ try {
      * GET USER
      */
     $stmt = $conn->prepare("
-        SELECT password
+        SELECT password_hash
         FROM users
         WHERE id = ?
         LIMIT 1
@@ -259,7 +260,7 @@ try {
     if (
         !password_verify(
             $old_password,
-            $user['password']
+            $user['password_hash']
         )
     ) {
 
@@ -282,7 +283,7 @@ try {
      */
     $update_stmt = $conn->prepare("
         UPDATE users
-        SET password = ?
+        SET password_hash = ?
         WHERE id = ?
     ");
 

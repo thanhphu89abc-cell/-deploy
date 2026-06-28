@@ -218,7 +218,7 @@
         });
         const data = await res.json();
         if (res.ok) {
-          localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, role: data.user.role, fullname: data.user.fullname }));
+          localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, user: data.user }));
           statusMsg.className = 'mt-3 text-center text-sm font-bold text-green-600 dark:text-green-400 block';
           statusMsg.innerText = "Xác thực thành công! Đang chuyển hướng...";
           setTimeout(() => window.location.href = (data.user.role === 'admin' || data.user.role === 'teacher') ? 'admin.html' : 'coursera-index.html', 1000);

@@ -5,10 +5,19 @@ use PHPMailer\PHPMailer\Exception;
 
 ob_start();
 ini_set('display_errors', 0);
-error_reporting(E_ALL);
+error_reporting(0);
 
-require '../db_connect.php';
-if (file_exists('../vendor/autoload.php')) require_once '../vendor/autoload.php';
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (ob_get_level()) ob_clean();
+        http_response_code(500);
+        echo json_encode(["status" => "error", "message" => "Lỗi hệ thống: " . $error['message']]);
+        exit;
+    }
+});
+
+require_once dirname(__DIR__) . '/db_connect.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -18,16 +27,28 @@ header('Content-Type: application/json; charset=utf-8');
 function sendEmail($email, $otp) {
     $mail = new PHPMailer(true);
     try {
+        // Lấy cấu hình SMTP từ biến môi trường, không hardcode
+        $smtp_host = $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com';
+        $smtp_user = $_ENV['SMTP_USER'] ?? null;
+        $smtp_pass = $_ENV['SMTP_PASS'] ?? null;
+        $smtp_port = $_ENV['SMTP_PORT'] ?? 587;
+
+        if (!$smtp_user || !$smtp_pass) {
+            // Nếu không có cấu hình, không gửi email và báo lỗi
+            error_log("Lỗi gửi email: Cấu hình SMTP (user/pass) chưa được thiết lập trong file .env");
+            return false;
+        }
+
         $mail->isSMTP();
-        $mail->Host       = $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com';
+        $mail->Host       = $smtp_host;
         $mail->SMTPAuth   = true;
-        $mail->Username   = $_ENV['SMTP_USER'] ?? 'your_email@gmail.com';
-        $mail->Password   = $_ENV['SMTP_PASS'] ?? 'your_app_password';
+        $mail->Username   = $smtp_user;
+        $mail->Password   = $smtp_pass;
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port       = $_ENV['SMTP_PORT'] ?? 587;
+        $mail->Port       = $smtp_port;
         $mail->CharSet    = 'UTF-8';
 
-        $mail->setFrom($_ENV['SMTP_USER'] ?? 'no-reply@coursera.vn', 'Coursera Advanced');
+        $mail->setFrom($smtp_user, 'Coursera Advanced');
         $mail->addAddress($email);
 
         $mail->isHTML(true);
@@ -37,6 +58,7 @@ function sendEmail($email, $otp) {
         $mail->send();
         return true;
     } catch (Exception $e) {
+        error_log("Lỗi PHPMailer: " . $mail->ErrorInfo);
         return false;
     }
 }

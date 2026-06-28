@@ -1,9 +1,19 @@
 <?php
-ini_set('display_errors', 1);
-error_reporting(E_ALL);
+ob_start();
+ini_set('display_errors', 0);
+error_reporting(0);
 
-require 'db_connect.php';
-require_once 'vendor/autoload.php';
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error !== null && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        if (ob_get_level()) ob_clean();
+        http_response_code(500);
+        echo json_encode(["message" => "Lỗi hệ thống (dashboard): " . $error['message'] . " (Dòng " . $error['line'] . ")"]);
+        exit;
+    }
+});
+
+require_once __DIR__ . '/db_connect.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -11,8 +21,13 @@ use Firebase\JWT\Key;
 header('Content-Type: application/json; charset=utf-8');
 
 // 1. Lấy vé (Token) từ trình duyệt gửi lên
-$headers = apache_request_headers();
-$authHeader = $headers['Authorization'] ?? ($headers['authorization'] ?? '');
+
+// [FIX] Sử dụng phương pháp lấy Header tương thích và ổn định hơn
+$authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+if (!$authHeader && function_exists('apache_request_headers')) {
+    $headers = apache_request_headers();
+    $authHeader = $headers['Authorization'] ?? ($headers['authorization'] ?? '');
+}
 
 if (empty($authHeader)) {
     http_response_code(401);
@@ -21,7 +36,8 @@ if (empty($authHeader)) {
 
 $token = str_replace('Bearer ', '', $authHeader);
 // KHÓA NÀY PHẢI GIỐNG HỆT BÊN LOGIN.PHP
-$secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+$secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+if (empty($secret_key)) die(json_encode(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."]));
 
 try {
     // 2. Giải mã Token

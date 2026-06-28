@@ -2,6 +2,7 @@
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
 ini_set('display_errors', 0);
 error_reporting(0);
@@ -17,8 +18,7 @@ register_shutdown_function(function() {
     }
 });
 
-require '../db_connect.php';
-if (file_exists('../vendor/autoload.php')) require_once '../vendor/autoload.php';
+require_once dirname(__DIR__) . '/db_connect.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -61,7 +61,8 @@ if (!(preg_match('#^/invoice/([^/]+)$#', $pathInfo) && $method === 'GET')) {
     }
 }
 
-$secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+$secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+if (empty($secret_key)) die(json_encode(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."]));
 
 try {
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
@@ -111,6 +112,59 @@ function jsonResponse($data, $status = 200) {
     exit();
 }
 
+if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
+    $summary = [];
+    $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+
+    // 1. Stats
+    $stmt_stats = $conn->prepare("SELECT SUM(price) as total_revenue, COUNT(id) as total_orders FROM orders WHERE current_step = 3 AND created_at >= ?");
+    $stmt_stats->bind_param("s", $thirty_days_ago);
+    $stmt_stats->execute();
+    $stats = $stmt_stats->get_result()->fetch_assoc();
+    $summary['stats']['revenue'] = $stats['total_revenue'] ?? 0;
+    $summary['stats']['orders'] = $stats['total_orders'] ?? 0;
+    $stmt_stats->close();
+
+    $stmt_users = $conn->prepare("SELECT COUNT(id) as total_users FROM users WHERE role = 'student' AND created_at >= ?");
+    $stmt_users->bind_param("s", $thirty_days_ago);
+    $stmt_users->execute();
+    $user_stats = $stmt_users->get_result()->fetch_assoc();
+    $summary['stats']['users'] = $user_stats['total_users'] ?? 0;
+    $stmt_users->close();
+
+    // 2. Revenue Chart
+    $revenue_chart = [];
+    $res_chart = $conn->query("SELECT DATE(created_at) as date, SUM(price) as total_revenue FROM orders WHERE current_step = 3 AND created_at >= '{$thirty_days_ago}' GROUP BY DATE(created_at) ORDER BY date ASC");
+    if ($res_chart) {
+        while ($row = $res_chart->fetch_assoc()) {
+            $row['date'] = date('d/m', strtotime($row['date']));
+            $revenue_chart[] = $row;
+        }
+    }
+    $summary['revenue_chart'] = $revenue_chart;
+
+    // 3. Recent Orders (Top 5)
+    $recent_orders = [];
+    $res_orders = $conn->query("SELECT o.id, o.course_name, o.price, o.current_step, u.fullname as user_fullname FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.id DESC LIMIT 5");
+    if ($res_orders) {
+        while ($row = $res_orders->fetch_assoc()) {
+            $recent_orders[] = $row;
+        }
+    }
+    $summary['recent_orders'] = $recent_orders;
+
+    // 4. New Users (Top 5)
+    $new_users = [];
+    $res_users = $conn->query("SELECT fullname, email, created_at FROM users WHERE role = 'student' ORDER BY id DESC LIMIT 5");
+    if ($res_users) {
+        while ($row = $res_users->fetch_assoc()) {
+            $new_users[] = $row;
+        }
+    }
+    $summary['new_users'] = $new_users;
+
+    jsonResponse($summary);
+}
 // 2.1 QUẢN LÝ ĐƠN HÀNG
 if ($pathInfo === '/orders' && $method === 'GET') {
     $orders = [];
@@ -123,68 +177,87 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     }
     jsonResponse(["orders" => $orders]);
 } elseif (preg_match('#^/approve-order/([^/]+)$#', $pathInfo, $matches) && $method === 'POST') {
-    $order_id = $conn->real_escape_string($matches[1]);
-    $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = '$order_id'");
-    if (!$res) {
-        // Tự động thêm cột current_step nếu DB của bạn chưa có
-        if (strpos($conn->error, 'current_step') !== false) {
-            $conn->query("ALTER TABLE orders ADD COLUMN current_step INT DEFAULT 1");
-            $res = $conn->query("UPDATE orders SET current_step = 3 WHERE id = '$order_id'");
-        }
-        if (!$res) jsonResponse(["message" => "Lỗi Database: " . mb_convert_encoding($conn->error, 'UTF-8', 'auto')], 500);
-    }
+    $order_id = $matches[1];
+    $stmt = $conn->prepare("UPDATE orders SET current_step = 3 WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    $stmt->close();
 
-    // Gửi email thông báo cho học viên
-    $stmt_email = $conn->query("SELECT u.email, u.fullname, o.course_name FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = '$order_id'");
-    if ($row = $stmt_email->fetch_assoc()) {
+    // Gửi email và tạo thông báo cho học viên
+    $stmt_info = $conn->prepare("SELECT o.user_id, u.email, u.fullname, c.title as course_title, o.course_name as course_id FROM orders o JOIN users u ON o.user_id = u.id JOIN courses c ON o.course_name COLLATE utf8mb4_unicode_ci = c.id WHERE o.id = ?");
+    if (!$stmt_info) jsonResponse(["message" => "Lỗi Database (prepare stmt_info): " . $conn->error], 500);
+    $stmt_info->bind_param("i", $order_id);
+    $stmt_info->execute();
+    $res_info = $stmt_info->get_result();
+    if ($row = $res_info->fetch_assoc()) {
+        $order_user_id = $row['user_id'];
+        $course_title = $row['course_title'];
+        $course_id_str = $row['course_id'];
+
+        // 1. Tạo thông báo trong DB
+        $notif_title = "Đơn hàng được duyệt";
+        $notif_message = "Lộ trình <span class=\"text-[#0056D2] dark:text-blue-400 font-bold\">{$course_title}</span> đã được duyệt. Vào học ngay!";
+        $stmt_notif = $conn->prepare("INSERT INTO notifications (user_id, title, message, course_id) VALUES (?, ?, ?, ?)");
+        $stmt_notif->bind_param("isss", $order_user_id, $notif_title, $notif_message, $course_id_str);
+        $stmt_notif->execute();
+        $stmt_notif->close();
+
+        // 2. Gửi email (logic cũ)
         try {
+            $smtp_user = $_ENV['SMTP_USER'] ?? null;
+            $smtp_pass = $_ENV['SMTP_PASS'] ?? null;
+
+            if (!$smtp_user || !$smtp_pass) {
+                error_log("Lỗi gửi email duyệt đơn hàng: Cấu hình SMTP chưa được thiết lập trong file .env");
+                // Bỏ qua việc gửi mail nếu không có cấu hình, không làm sập tiến trình
+                jsonResponse(["success" => true, "message" => "Đã duyệt thành công đơn hàng #$order_id (Cảnh báo: không thể gửi email do thiếu cấu hình SMTP)."]);
+            }
+
             $mail = new PHPMailer(true);
             $mail->isSMTP();
             $mail->Host       = $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com';
             $mail->SMTPAuth   = true;
-            $mail->Username   = $_ENV['SMTP_USER'] ?? 'your_email@gmail.com';
-            $mail->Password   = $_ENV['SMTP_PASS'] ?? 'your_app_password';
+            $mail->Username   = $smtp_user;
+            $mail->Password   = $smtp_pass;
             $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
             $mail->Port       = $_ENV['SMTP_PORT'] ?? 587;
             $mail->CharSet    = 'UTF-8';
-            $mail->setFrom($_ENV['SMTP_USER'] ?? 'no-reply@coursera.vn', 'Coursera Advanced');
+            $mail->setFrom($smtp_user, 'Coursera Advanced');
             $mail->addAddress($row['email'], $row['fullname']);
             $mail->isHTML(true);
             $mail->Subject = 'Khóa học của bạn đã được duyệt!';
-            $mail->Body    = "<h3>Chào {$row['fullname']},</h3><p>Đơn đăng ký khóa học <b>{$row['course_name']}</b> của bạn đã được Quản trị viên phê duyệt thành công.</p><p>Bạn đã có thể đăng nhập vào hệ thống và bắt đầu học ngay bây giờ!</p><br><p>Chúc bạn học tốt,<br>Coursera Advanced Team</p>";
+            $mail->Body    = "<h3>Chào {$row['fullname']},</h3><p>Đơn đăng ký khóa học <b>{$course_title}</b> của bạn đã được Quản trị viên phê duyệt thành công.</p><p>Bạn đã có thể đăng nhập vào hệ thống và bắt đầu học ngay bây giờ!</p><br><p>Chúc bạn học tốt,<br>Coursera Advanced Team</p>";
             $mail->send();
-        } catch (Exception $e) {}
+        } catch (Exception $e) {
+            error_log("Lỗi PHPMailer khi duyệt đơn hàng: " . $mail->ErrorInfo);
+        }
     }
+    $stmt_info->close();
 
     jsonResponse(["success" => true, "message" => "Đã duyệt thành công đơn hàng #$order_id."]);
 } elseif (preg_match('#^/cancel-order/([^/]+)$#', $pathInfo, $matches) && $method === 'POST') {
-    $order_id = $conn->real_escape_string($matches[1]);
-    $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = '$order_id'");
-    if (!$res) {
-        if (strpos($conn->error, 'current_step') !== false) {
-            $conn->query("ALTER TABLE orders ADD COLUMN current_step INT DEFAULT 1");
-            $res = $conn->query("UPDATE orders SET current_step = 4 WHERE id = '$order_id'");
-        }
-        if (!$res) jsonResponse(["message" => "Lỗi Database: " . mb_convert_encoding($conn->error, 'UTF-8', 'auto')], 500);
-    }
+    $order_id = $matches[1];
+    $stmt = $conn->prepare("UPDATE orders SET current_step = 4 WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
+    $stmt->bind_param("i", $order_id);
+    $stmt->execute();
+    $stmt->close();
     jsonResponse(["success" => true, "message" => "Đã hủy đơn hàng #$order_id."]);
 } elseif ($pathInfo === '/orders/clear-cancelled' && $method === 'DELETE') {
     $res = $conn->query("DELETE FROM orders WHERE current_step = 4");
     if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Đã dọn dẹp toàn bộ đơn hàng bị hủy."]);
 } elseif (preg_match('#^/orders/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $order_id = $conn->real_escape_string($matches[1]);
-    $res = $conn->query("DELETE FROM orders WHERE id = '$order_id'");
-    if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
+    $order_id = $matches[1];
+    $stmt = $conn->prepare("DELETE FROM orders WHERE id = ?");
+    $stmt->bind_param("i", $order_id);
+    if (!$stmt->execute()) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Xóa đơn hàng thành công."]);
 
 // 2.2 QUẢN LÝ HỌC VIÊN
 } elseif ($pathInfo === '/users' && $method === 'GET') {
     $users = [];
-    $check_col = $conn->query("SHOW COLUMNS FROM users LIKE 'is_blocked'");
-    if ($check_col->num_rows == 0) {
-        $conn->query("ALTER TABLE users ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
-    }
     $res = $conn->query("SELECT id, fullname, email, role, created_at, is_blocked FROM users ORDER BY id DESC");
     if ($res) {
         while ($row = $res->fetch_assoc()) {
@@ -198,6 +271,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     $fullname = $input['fullname'] ?? ''; $email = $input['email'] ?? ''; $role = $input['role'] ?? 'student'; $password = $input['password'] ?? '123456';
     
     $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("s", $email);
     $stmt->execute();
     if ($stmt->fetch()) {
@@ -208,6 +282,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     
     $hashed = password_hash($password, PASSWORD_DEFAULT);
     $stmt = $conn->prepare("INSERT INTO users (fullname, email, password_hash, role) VALUES (?, ?, ?, ?)");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("ssss", $fullname, $email, $hashed, $role);
     $stmt->execute();
     jsonResponse(["message" => "Thêm người dùng thành công"], 201);
@@ -221,9 +296,11 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     if ($password) {
         $hashed = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ?, password_hash = ? WHERE id = ?");
+        if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
         $stmt->bind_param("sssss", $fullname, $email, $role, $hashed, $uid);
     } else {
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ? WHERE id = ?");
+        if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
         $stmt->bind_param("ssss", $fullname, $email, $role, $uid);
     }
     $stmt->execute();
@@ -231,33 +308,36 @@ if ($pathInfo === '/orders' && $method === 'GET') {
 } elseif (preg_match('#^/users/([^/]+)/toggle-block$#', $pathInfo, $matches) && $method === 'PUT') {
     $uid = $matches[1];
     $is_blocked = isset($input['is_blocked']) ? (int)$input['is_blocked'] : 0;
-    $check_col = $conn->query("SHOW COLUMNS FROM users LIKE 'is_blocked'");
-    if ($check_col->num_rows == 0) {
-        $conn->query("ALTER TABLE users ADD COLUMN is_blocked TINYINT(1) DEFAULT 0");
-    }
     $stmt = $conn->prepare("UPDATE users SET is_blocked = ? WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("is", $is_blocked, $uid);
     $stmt->execute();
     jsonResponse(["message" => $is_blocked ? "Đã khóa tài khoản thành công." : "Đã mở khóa tài khoản thành công."]);
 } elseif (preg_match('#^/users/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $uid = $conn->real_escape_string($matches[1]);
-    $conn->query("DELETE FROM users WHERE id = '$uid'");
+    $uid = $matches[1];
+    $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+    $stmt->bind_param("i", $uid);
+    $stmt->execute();
     jsonResponse(["message" => "Xóa người dùng thành công."]);
 
 // 2.3 DOANH THU THỐNG KÊ & HÓA ĐƠN
 } elseif ($pathInfo === '/revenue' && $method === 'GET') {
     $revenue = [];
-    $res = $conn->query("SELECT DATE(created_at) as date, SUM(price) as total_revenue FROM orders WHERE current_step = 3 GROUP BY DATE(created_at) ORDER BY date ASC LIMIT 30");
+    $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+    $res = $conn->query("SELECT DATE(created_at) as date, SUM(price) as total_revenue FROM orders WHERE current_step = 3 AND created_at >= '{$thirty_days_ago}' GROUP BY DATE(created_at) ORDER BY date ASC");
     if ($res) {
         while ($row = $res->fetch_assoc()) {
-            $row['date'] = date('d/m/Y', strtotime($row['date']));
+            $row['date'] = date('d/m', strtotime($row['date']));
             $revenue[] = $row;
         }
+    } else {
+        error_log("Admin revenue query failed: " . $conn->error);
     }
     jsonResponse(["revenue" => $revenue]);
 } elseif (preg_match('#^/invoice/([^/]+)$#', $pathInfo, $matches) && $method === 'GET') {
     $order_id = $matches[1];
     $stmt = $conn->prepare("SELECT o.id, o.course_name, o.price, o.current_step, o.created_at, u.fullname as user_fullname, u.email as user_email FROM orders o JOIN users u ON o.user_id = u.id WHERE o.id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("s", $order_id);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -333,22 +413,44 @@ HTML;
 // 2.4 QUẢN LÝ KHÓA HỌC
 } elseif ($pathInfo === '/courses' && $method === 'GET') {
     $courses = [];
+    $course_map = [];
     $res = $conn->query("SELECT id, title, original_price, price, badge, color, icon FROM courses");
-    if ($res) {
-        while ($course = $res->fetch_assoc()) {
-            $course['weeks'] = [];
-            $weeks_res = $conn->query("SELECT id, week_number, title FROM course_weeks WHERE course_id = '{$course['id']}' ORDER BY week_number");
-            if ($weeks_res) {
-                while ($week = $weeks_res->fetch_assoc()) {
-                    $week['items'] = [];
-                    $lessons_res = $conn->query("SELECT * FROM lessons WHERE week_id = {$week['id']} ORDER BY id");
-                    if ($lessons_res) {
-                        while ($lesson = $lessons_res->fetch_assoc()) { $week['items'][] = $lesson; }
-                    }
-                    $course['weeks'][] = $week;
+    if (!$res) jsonResponse(["message" => "Lỗi CSDL (courses)"], 500);
+    while ($c = $res->fetch_assoc()) {
+        $c['weeks'] = [];
+        $courses[] = $c;
+        $course_map[$c['id']] = &$courses[count($courses) - 1];
+    }
+    $course_ids = array_keys($course_map);
+
+    if (!empty($course_ids)) {
+        $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
+        $types = str_repeat('s', count($course_ids));
+        
+        $weeks_stmt = $conn->prepare("SELECT id, course_id, week_number, title FROM course_weeks WHERE course_id IN ($placeholders) ORDER BY course_id, week_number");
+        if ($weeks_stmt) {
+            $weeks_stmt->bind_param($types, ...$course_ids);
+            $weeks_stmt->execute();
+            $weeks_res = $weeks_stmt->get_result();
+            $week_map = [];
+            while ($w = $weeks_res->fetch_assoc()) {
+                $w['items'] = [];
+                $week_map[$w['id']] = $w;
+            }
+            $week_ids = array_keys($week_map);
+
+            if (!empty($week_ids)) {
+                $placeholders_lessons = implode(',', array_fill(0, count($week_ids), '?'));
+                $types_lessons = str_repeat('i', count($week_ids));
+                $lessons_stmt = $conn->prepare("SELECT * FROM lessons WHERE week_id IN ($placeholders_lessons) ORDER BY week_id, id");
+                if ($lessons_stmt) {
+                    $lessons_stmt->bind_param($types_lessons, ...$week_ids);
+                    $lessons_stmt->execute();
+                    $lessons_res = $lessons_stmt->get_result();
+                    while ($lesson = $lessons_res->fetch_assoc()) { if (isset($week_map[$lesson['week_id']])) { $week_map[$lesson['week_id']]['items'][] = $lesson; } }
                 }
             }
-            $courses[] = $course;
+            foreach ($week_map as $week) { if (isset($course_map[$week['course_id']])) { $course_map[$week['course_id']]['weeks'][] = $week; } }
         }
     }
     jsonResponse(["courses" => $courses]);
@@ -362,6 +464,7 @@ HTML;
     if (!$c_id || !$title) jsonResponse(["message" => "Thiếu mã định danh hoặc tiêu đề!"], 400);
     
     $stmt = $conn->prepare("INSERT INTO courses (id, title, price, original_price, badge, icon, color) VALUES (?, ?, ?, ?, ?, ?, 'from-gray-600 to-slate-800')");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("ssiiss", $c_id, $title, $price, $price, $badge, $icon);
     $stmt->execute();
     jsonResponse(["message" => "Thêm khóa học mới thành công."], 201);
@@ -372,28 +475,17 @@ HTML;
     $icon = $input['icon'] ?? '';
 
     $stmt = $conn->prepare("UPDATE courses SET title = ?, badge = ?, icon = ? WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("ssss", $title, $badge, $icon, $c_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật khóa học thành công."]);
 } elseif (preg_match('#^/courses/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
     $c_id = $matches[1];
-    
-    $stmt = $conn->prepare("SELECT id FROM course_weeks WHERE course_id = ?");
+    // Sử dụng ON DELETE CASCADE trong CSDL là cách tốt nhất.
+    // Mã này giả định rằng CSDL đã được thiết lập đúng cách.
+    $stmt = $conn->prepare("DELETE FROM courses WHERE id = ?");
     $stmt->bind_param("s", $c_id);
     $stmt->execute();
-    $weeks_res = $stmt->get_result();
-    while ($w = $weeks_res->fetch_assoc()) {
-        $l_stmt = $conn->prepare("SELECT id FROM lessons WHERE week_id = ?");
-        $l_stmt->bind_param("s", $w['id']);
-        $l_stmt->execute();
-        $l_res = $l_stmt->get_result();
-        while ($l = $l_res->fetch_assoc()) {
-            $conn->query("DELETE FROM user_progress WHERE lesson_id = '" . $l['id'] . "'");
-        }
-        $conn->query("DELETE FROM lessons WHERE week_id = '" . $w['id'] . "'");
-    }
-    $conn->query("DELETE FROM course_weeks WHERE course_id = '$c_id'");
-    $conn->query("DELETE FROM courses WHERE id = '$c_id'");
     jsonResponse(["message" => "Xóa khóa học thành công."]);
 
 } elseif (preg_match('#^/courses/([^/]+)/weeks$#', $pathInfo, $matches) && $method === 'POST') {
@@ -402,6 +494,7 @@ HTML;
     $title = $input['title'] ?? 'Tuần mới';
 
     $stmt = $conn->prepare("INSERT INTO course_weeks (course_id, week_number, title) VALUES (?, ?, ?)");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("sis", $c_id, $week_number, $title);
     $stmt->execute();
     jsonResponse(["message" => "Thêm tuần học mới thành công."], 201);
@@ -411,20 +504,15 @@ HTML;
     $title = $input['title'] ?? 'Tuần mới';
 
     $stmt = $conn->prepare("UPDATE course_weeks SET week_number = ?, title = ? WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("iss", $week_number, $title, $w_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật tuần học thành công."]);
 } elseif (preg_match('#^/weeks/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $w_id = $conn->real_escape_string($matches[1]);
-    $stmt = $conn->prepare("SELECT id FROM lessons WHERE week_id = ?");
-    $stmt->bind_param("s", $w_id);
+    $w_id = $matches[1];
+    $stmt = $conn->prepare("DELETE FROM course_weeks WHERE id = ?");
+    $stmt->bind_param("i", $w_id);
     $stmt->execute();
-    $l_res = $stmt->get_result();
-    while ($l = $l_res->fetch_assoc()) {
-        $conn->query("DELETE FROM user_progress WHERE lesson_id = '" . $l['id'] . "'");
-    }
-    $conn->query("DELETE FROM lessons WHERE week_id = '$w_id'");
-    $conn->query("DELETE FROM course_weeks WHERE id = '$w_id'");
     jsonResponse(["message" => "Xóa tuần học thành công."]);
 } elseif (preg_match('#^/weeks/([^/]+)/lessons$#', $pathInfo, $matches) && $method === 'POST') {
     $w_id = $matches[1];
@@ -433,6 +521,7 @@ HTML;
     $duration = 10;
     
     $stmt = $conn->prepare("INSERT INTO lessons (week_id, type, title, duration) VALUES (?, ?, ?, ?)");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("sssi", $w_id, $type, $title, $duration);
     $stmt->execute();
     jsonResponse(["message" => "Thêm bài học mới thành công."], 201);
@@ -448,23 +537,22 @@ HTML;
     $flag = $input['flag'] ?? null;
 
     $stmt = $conn->prepare("UPDATE lessons SET title=?, video_url=?, description=?, quiz_question=?, quiz_option_a=?, quiz_option_b=?, quiz_correct_answer=?, flag=? WHERE id=?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("sssssssss", $title, $video_url, $description, $quiz_question, $quiz_option_a, $quiz_option_b, $quiz_correct_answer, $flag, $l_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật bài học thành công."]);
 } elseif (preg_match('#^/lessons/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $l_id = $conn->real_escape_string($matches[1]);
-    $conn->query("DELETE FROM user_progress WHERE lesson_id = '$l_id'");
-    $conn->query("DELETE FROM lessons WHERE id = '$l_id'");
+    $l_id = $matches[1];
+    $stmt = $conn->prepare("DELETE FROM lessons WHERE id = ?");
+    $stmt->bind_param("i", $l_id);
+    $stmt->execute();
     jsonResponse(["message" => "Xóa bài học thành công."]);
 
 // 2.5 QUẢN LÝ MÃ GIẢM GIÁ
 } elseif ($pathInfo === '/discounts' && $method === 'GET') {
     $discounts = [];
     $res = $conn->query("SELECT * FROM discount_codes ORDER BY id DESC");
-    if (!$res) {
-        $conn->query("ALTER TABLE discount_codes ADD COLUMN expires_at DATETIME NULL");
-        $res = $conn->query("SELECT * FROM discount_codes ORDER BY id DESC");
-    }
+    if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     if ($res) {
         while ($row = $res->fetch_assoc()) {
             $row['discount_rate'] = floatval($row['discount_rate']);
@@ -477,10 +565,7 @@ HTML;
     $expires_at = !empty($input['expires_at']) ? $input['expires_at'] : null;
     
     $stmt = $conn->prepare("SELECT id FROM discount_codes WHERE code = ?");
-    if (!$stmt) {
-        $conn->query("ALTER TABLE discount_codes ADD COLUMN expires_at DATETIME NULL");
-        $stmt = $conn->prepare("SELECT id FROM discount_codes WHERE code = ?");
-    }
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("s", $code);
     $stmt->execute();
     if ($stmt->fetch()) {
@@ -490,17 +575,21 @@ HTML;
     $stmt->close();
     
     $stmt = $conn->prepare("INSERT INTO discount_codes (code, discount_rate, expires_at) VALUES (?, ?, ?)");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("sds", $code, $rate, $expires_at);
     $stmt->execute();
     jsonResponse(["message" => "Thêm mã giảm giá thành công."], 201);
 } elseif (preg_match('#^/discounts/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
-    $disc_id = $conn->real_escape_string($matches[1]);
-    $conn->query("DELETE FROM discount_codes WHERE id = '$disc_id'");
+    $disc_id = $matches[1];
+    $stmt = $conn->prepare("DELETE FROM discount_codes WHERE id = ?");
+    $stmt->bind_param("i", $disc_id);
+    $stmt->execute();
     jsonResponse(["message" => "Xóa mã giảm giá thành công."]);
 } elseif (preg_match('#^/discounts/([^/]+)$#', $pathInfo, $matches) && $method === 'PUT') {
     $disc_id = $matches[1];
     $is_active = isset($input['is_active']) ? (int)$input['is_active'] : 1;
     $stmt = $conn->prepare("UPDATE discount_codes SET is_active = ? WHERE id = ?");
+    if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("is", $is_active, $disc_id);
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật trạng thái thành công."]);

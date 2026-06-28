@@ -13,8 +13,7 @@ register_shutdown_function(function() {
     }
 });
 
-require 'db_connect.php';
-if (file_exists('vendor/autoload.php')) require_once 'vendor/autoload.php';
+require_once __DIR__ . '/db_connect.php';
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -56,7 +55,9 @@ if ($pathInfo === '/verify-otp' && $method === 'POST') {
     if ($record['otp'] !== $otp) jsonResponse(["message" => "Mã xác nhận không đúng."], 400);
     if (strtotime($record['expires_at']) < time()) jsonResponse(["message" => "Mã xác nhận đã hết hạn."], 400);
     
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
+
     $reset_token = JWT::encode(['email' => $email, 'action' => 'reset_password', 'exp' => time() + 900], $secret_key, 'HS256');
     jsonResponse(["message" => "Xác thực OTP thành công.", "token" => $reset_token]);
 
@@ -64,7 +65,8 @@ if ($pathInfo === '/verify-otp' && $method === 'POST') {
     $email = $input['email'] ?? '';
     $new_password = $input['newPassword'] ?? '';
     $resetToken = $input['token'] ?? '';
-    $secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+    $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+    if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
     
     try {
         $payload = JWT::decode($resetToken, new Key($secret_key, 'HS256'));
@@ -75,7 +77,10 @@ if ($pathInfo === '/verify-otp' && $method === 'POST') {
         $stmt = $conn->prepare("UPDATE users SET password_hash = ? WHERE email = ?");
         $stmt->bind_param("ss", $hashed, $email);
         $stmt->execute();
-        $conn->query("DELETE FROM otp_codes WHERE email = '$email'");
+        // [FIX] Vá lỗi SQL Injection
+        $stmt_del = $conn->prepare("DELETE FROM otp_codes WHERE email = ?");
+        $stmt_del->bind_param("s", $email);
+        $stmt_del->execute();
         jsonResponse(["message" => "Đổi mật khẩu thành công!"]);
     } catch (Exception $e) {
         jsonResponse(["message" => "Thời gian đổi mật khẩu đã hết hạn."], 400);
@@ -146,7 +151,9 @@ if (empty($token)) {
     jsonResponse(["message" => "Vui lòng đăng nhập!"], 401);
 }
 
-$secret_key = 'coursera_advanced_secure_key_32_chars_long_2026_authentication_key!';
+$secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
+
 try {
     $decoded = JWT::decode($token, new Key($secret_key, 'HS256'));
     $user_id = $decoded->user_id;
@@ -160,49 +167,72 @@ try {
 // 3. CÁC TÍNH NĂNG TƯƠNG TÁC
 // ==============================================
 if ($pathInfo === '/courses' && $method === 'GET') {
+    // [FIX] Tối ưu hóa N+1 Query và đảm bảo tương thích PHP cũ
+    $courses_res = $conn->query("SELECT id, title, original_price, price, badge, color, icon FROM courses");
+    if (!$courses_res) jsonResponse(["message" => "Lỗi CSDL (courses)"], 500);
     $courses = [];
-    $res = $conn->query("SELECT id, title, original_price, price, badge, color, icon FROM courses");
-    if ($res) {
-        while ($course = $res->fetch_assoc()) {
-            $course['weeks'] = [];
-            $safe_c_id = $conn->real_escape_string($course['id']);
-            $weeks_res = $conn->query("SELECT id, week_number, title FROM course_weeks WHERE course_id = '$safe_c_id' ORDER BY week_number");
-            if ($weeks_res) {
-                while ($week = $weeks_res->fetch_assoc()) {
-                    $week['items'] = [];
-                    $lessons_res = $conn->query("SELECT id, week_id, type, title, duration, video_url as videoSrc, description, quiz_question, quiz_option_a, quiz_option_b, quiz_correct_answer FROM lessons WHERE week_id = " . intval($week['id']) . " ORDER BY id");
-                    if ($lessons_res) {
-                        while ($lesson = $lessons_res->fetch_assoc()) { 
-                            if (!empty($lesson['quiz_question'])) {
-                                $lesson['quiz'] = [
-                                    "question" => $lesson['quiz_question'],
-                                    "options" => [
-                                        ["v" => "a", "t" => $lesson['quiz_option_a']],
-                                        ["v" => "b", "t" => $lesson['quiz_option_b']]
-                                    ],
-                                    "correct" => $lesson['quiz_correct_answer']
-                                ];
-                            } else {
-                                $lesson['quiz'] = null;
-                            }
-                            
-                            $prog_stmt = @$conn->prepare("SELECT id FROM user_progress WHERE user_id = ? AND lesson_id = ?");
-                            if ($prog_stmt) {
-                                $prog_stmt->bind_param("ii", $user_id, $lesson['id']);
-                                $prog_stmt->execute();
-                                $lesson['completed'] = $prog_stmt->get_result()->num_rows > 0;
-                                $prog_stmt->close();
-                            } else {
-                                $lesson['completed'] = false;
-                            }
+    $course_map = [];
+    while ($c = $courses_res->fetch_assoc()) {
+        $c['weeks'] = [];
+        $courses[] = $c;
+        $course_map[$c['id']] = &$courses[count($courses) - 1];
+    }
+    $course_ids = array_keys($course_map);
 
-                            $week['items'][] = $lesson; 
-                        }
-                    }
-                    $course['weeks'][] = $week;
-                }
+    if (empty($course_ids)) {
+        jsonResponse(["courses" => []]);
+    }
+
+    $progress_stmt = $conn->prepare("SELECT lesson_id FROM user_progress WHERE user_id = ?");
+    $progress_stmt->bind_param("i", $user_id);
+    $progress_stmt->execute();
+    $completed_lessons = array_flip(array_column($progress_stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'lesson_id'));
+    $progress_stmt->close();
+
+    $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
+    $weeks_stmt = $conn->prepare("SELECT id, course_id, week_number, title FROM course_weeks WHERE course_id IN ($placeholders) ORDER BY week_number");
+    
+    // Tương thích PHP cũ cho bind_param
+    $types = str_repeat('s', count($course_ids));
+    $params = array_merge([$types], $course_ids);
+    $refs = [];
+    foreach($params as $key => $value) $refs[$key] = &$params[$key];
+    call_user_func_array([$weeks_stmt, 'bind_param'], $refs);
+    
+    $weeks_stmt->execute();
+    $weeks_res = $weeks_stmt->get_result();
+    $week_map = [];
+    while ($w = $weeks_res->fetch_assoc()) {
+        $w['items'] = [];
+        $week_map[$w['id']] = $w;
+    }
+    $week_ids = array_keys($week_map);
+
+    if (!empty($week_ids)) {
+        $placeholders_lessons = implode(',', array_fill(0, count($week_ids), '?'));
+        $lessons_stmt = $conn->prepare("SELECT id, week_id, type, title, duration, video_url as videoSrc, description, quiz_question, quiz_option_a, quiz_option_b, quiz_correct_answer FROM lessons WHERE week_id IN ($placeholders_lessons) ORDER BY id");
+        
+        // Tương thích PHP cũ cho bind_param
+        $types_lessons = str_repeat('i', count($week_ids));
+        $params_lessons = array_merge([$types_lessons], $week_ids);
+        $refs_lessons = [];
+        foreach($params_lessons as $key => $value) $refs_lessons[$key] = &$params_lessons[$key];
+        call_user_func_array([$lessons_stmt, 'bind_param'], $refs_lessons);
+        
+        $lessons_stmt->execute();
+        $lessons_res = $lessons_stmt->get_result();
+        
+        while ($lesson = $lessons_res->fetch_assoc()) {
+            $lesson['completed'] = isset($completed_lessons[$lesson['id']]);
+            $lesson['quiz'] = !empty($lesson['quiz_question']) ? ["question" => $lesson['quiz_question'], "options" => [["v" => "a", "t" => $lesson['quiz_option_a']], ["v" => "b", "t" => $lesson['quiz_option_b']]], "correct" => $lesson['quiz_correct_answer']] : null;
+            if (isset($week_map[$lesson['week_id']])) {
+                $week_map[$lesson['week_id']]['items'][] = $lesson;
             }
-            $courses[] = $course;
+        }
+    }
+    foreach ($week_map as $week) {
+        if (isset($course_map[$week['course_id']])) {
+            $course_map[$week['course_id']]['weeks'][] = $week;
         }
     }
     jsonResponse(["courses" => $courses]);
@@ -385,6 +415,45 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     jsonResponse(["message" => "Thay đổi mật khẩu thành công!"]);
 
+} elseif ($pathInfo === '/user/profile' && $method === 'PUT') {
+    $fullname = trim($input['fullname'] ?? '');
+
+    if (empty($fullname)) {
+        jsonResponse(["message" => "Vui lòng nhập họ và tên!"], 400);
+    }
+
+    $stmt = $conn->prepare("UPDATE users SET fullname = ? WHERE id = ?");
+    $stmt->bind_param("si", $fullname, $user_id);
+    
+    if ($stmt->execute()) {
+        // Cập nhật lại token với tên mới để UI hiển thị ngay lập tức
+        $secret_key = $_ENV['JWT_SECRET_KEY'] ?? '';
+        if (empty($secret_key)) jsonResponse(["message" => "Lỗi hệ thống: JWT Secret chưa được cấu hình."], 500);
+        
+        
+        $stmt_get = $conn->prepare("SELECT id, email, fullname, role FROM users WHERE id = ?");
+        $stmt_get->bind_param("i", $user_id);
+        $stmt_get->execute();
+        $user = $stmt_get->get_result()->fetch_assoc();
+        $stmt_get->close();
+
+        $payload = [
+            'user_id' => $user['id'],
+            'email' => $user['email'],
+            'fullname' => $user['fullname'],
+            'exp' => time() + (24 * 60 * 60) // Token mới có hiệu lực 24h
+        ];
+        $new_jwt = JWT::encode($payload, $secret_key, 'HS256');
+
+        jsonResponse([
+            "message" => "Cập nhật thông tin thành công!",
+            "new_token" => $new_jwt,
+            "user" => $user
+        ]);
+    } else {
+        jsonResponse(["message" => "Lỗi cập nhật thông tin."], 500);
+    }
+    $stmt->close();
 } elseif (preg_match('#^/certificate/([^/]+)$#', $pathInfo, $matches) && $method === 'GET') {
     $course_id = $matches[1];
     $stmt = $conn->prepare("SELECT title FROM courses WHERE id = ?");
@@ -512,28 +581,31 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     $total_price = 0;
     $order_ids = [];
     
-    // Khắc phục lỗi sập PHP < 8.1 do hàm bind_param
-    $escaped_ids = array_map(function($id) use ($conn) { return "'" . $conn->real_escape_string($id) . "'"; }, $course_ids);
-    $in_clause = implode(',', $escaped_ids);
-    $res = $conn->query("SELECT id, title, price FROM courses WHERE id IN ($in_clause)");
+    // Sử dụng prepared statement với IN clause
+    $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
+    $types = str_repeat('s', count($course_ids));
+    $stmt = $conn->prepare("SELECT id, title, price FROM courses WHERE id IN ($placeholders)");
+    $stmt->bind_param($types, ...$course_ids);
+    $stmt->execute();
+    $res = $stmt->get_result();
     if (!$res) jsonResponse(["message" => "Lỗi Database (courses): " . $conn->error], 500);
     
     $courses = [];
     while ($row = $res->fetch_assoc()) { $courses[] = $row; }
+    $stmt->close();
 
     if (empty($courses)) jsonResponse(["message" => "Khóa học không tồn tại!"], 404);
 
     foreach ($courses as $c) {
         $total_price += intval($c['price']);
-        $safe_c_id = $conn->real_escape_string($c['id']);
         $price_val = intval($c['price']);
         
-        $res_check = $conn->query("SELECT id, current_step FROM orders WHERE user_id = $user_id AND course_name = '$safe_c_id'");
-        if (!$res_check) {
-            $conn->query("ALTER TABLE orders ADD COLUMN current_step INT DEFAULT 1");
-            $res_check = $conn->query("SELECT id, current_step FROM orders WHERE user_id = $user_id AND course_name = '$safe_c_id'");
-            if (!$res_check) jsonResponse(["message" => "Lỗi Database (orders): " . $conn->error], 500);
-        }
+        $stmt_check = $conn->prepare("SELECT id, current_step FROM orders WHERE user_id = ? AND course_name = ?");
+        if (!$stmt_check) jsonResponse(["message" => "Lỗi Database (orders): " . $conn->error], 500);
+        
+        $stmt_check->bind_param("is", $user_id, $c['id']);
+        $stmt_check->execute();
+        $res_check = $stmt_check->get_result();
         
         if ($row = $res_check->fetch_assoc()) {
             $existing_id = $row['id'];
@@ -544,7 +616,9 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
                 $stmt_upd_cart->execute();
             }
         } else {
-            $conn->query("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES ($user_id, '$safe_c_id', $price_val, 1, NOW())");
+            $stmt_ins_cart = $conn->prepare("INSERT INTO orders (user_id, course_name, price, current_step, created_at) VALUES (?, ?, ?, 1, NOW())");
+            $stmt_ins_cart->bind_param("isi", $user_id, $c['id'], $price_val);
+            $stmt_ins_cart->execute();
             $order_ids[] = $conn->insert_id;
         }
     }
@@ -585,7 +659,11 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     }
 
     // DÁN MÃ API KEY CỦA GOOGLE GEMINI VÀO ĐÂY
-    $api_key = 'AIzaSyC3lrJN0s11XsN4m67HSqEOvRrO7t6xlnE';
+    $api_key = $_ENV['GEMINI_API_KEY'] ?? '';
+    if (empty($api_key) || strpos($api_key, 'YOUR_') !== false) {
+        jsonResponse(["reply" => "Lỗi hệ thống: CyberAI chưa được cấu hình. Vui lòng liên hệ quản trị viên."]);
+        exit;
+    }
     
     $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=' . trim($api_key);
     
