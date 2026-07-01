@@ -1494,13 +1494,15 @@ function applyAdminInitialTheme() {
 document.addEventListener('DOMContentLoaded', () => {
     applyAdminInitialTheme();
     const session = JSON.parse(localStorage.getItem('coursera_user_session'));
-    if (session && session.role === 'teacher') {
+    if (session && session.user && session.user.role === 'teacher') {
         const navDash = document.getElementById('nav-item-dashboard');
         const navOrders = document.getElementById('nav-item-orders');
         const navUsers = document.getElementById('nav-item-users');
+        const navDiscounts = document.getElementById('nav-item-discounts');
         if (navDash) navDash.classList.add('hidden');
         if (navOrders) navOrders.classList.add('hidden');
         if (navUsers) navUsers.classList.add('hidden');
+        if (navDiscounts) navDiscounts.classList.add('hidden');
         switchAdminTab('courses');
     } else {
         switchAdminTab('dashboard');

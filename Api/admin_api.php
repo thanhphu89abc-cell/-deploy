@@ -82,6 +82,32 @@ try {
         http_response_code(403);
         die(json_encode(["message" => "Bạn không có quyền truy cập vào tài nguyên này."]));
     }
+
+    // [FIX] Phân quyền chi tiết cho Giảng viên (teacher)
+    if ($user_role === 'teacher') {
+        $admin_only_endpoints = [
+            '/dashboard-summary',
+            '/revenue',
+            '#^/orders#',
+            '#^/approve-order/([^/]+)$#',
+            '#^/cancel-order/([^/]+)$#',
+            '#^/users#',
+            '#^/invoice/([^/]+)$#',
+            '#^/discounts#',
+        ];
+
+        $is_admin_endpoint = false;
+        foreach ($admin_only_endpoints as $pattern) {
+            if (substr($pattern, 0, 1) === '#' ? preg_match($pattern, $pathInfo) : $pathInfo === $pattern) {
+                $is_admin_endpoint = true;
+                break;
+            }
+        }
+
+        if ($is_admin_endpoint) {
+            jsonResponse(["message" => "Giảng viên không có quyền truy cập vào chức năng này."], 403);
+        }
+    }
 } catch (Exception $e) {
     if (ob_get_level()) ob_clean();
     http_response_code(401);
@@ -183,12 +209,27 @@ if ($pathInfo === '/orders' && $method === 'GET') {
         $course_title = $row['course_title'];
         $course_id_str = $row['course_id'];
 
+        // [FIX] Tự động tạo bảng notifications nếu chưa tồn tại để tránh lỗi sập hệ thống
+        $conn->query("CREATE TABLE IF NOT EXISTS `notifications` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `user_id` int(11) NOT NULL,
+            `title` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+            `message` text COLLATE utf8mb4_unicode_ci NOT NULL,
+            `course_id` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+            `read` tinyint(1) NOT NULL DEFAULT 0,
+            `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+            PRIMARY KEY (`id`),
+            KEY `user_id` (`user_id`)
+          ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;");
+
         $notif_title = "Đơn hàng được duyệt";
         $notif_message = "Lộ trình <span class=\"text-[#0056D2] dark:text-blue-400 font-bold\">{$course_title}</span> đã được duyệt. Vào học ngay!";
         $stmt_notif = $conn->prepare("INSERT INTO notifications (user_id, title, message, course_id) VALUES (?, ?, ?, ?)");
-        $stmt_notif->bind_param("isss", $order_user_id, $notif_title, $notif_message, $course_id_str);
-        $stmt_notif->execute();
-        $stmt_notif->close();
+        if ($stmt_notif) {
+            $stmt_notif->bind_param("isss", $order_user_id, $notif_title, $notif_message, $course_id_str);
+            $stmt_notif->execute();
+            $stmt_notif->close();
+        }
 
         try {
             $smtp_user = $_ENV['SMTP_USER'] ?? null;
@@ -198,7 +239,6 @@ if ($pathInfo === '/orders' && $method === 'GET') {
                 error_log("Lỗi gửi email duyệt đơn hàng: Cấu hình SMTP chưa được thiết lập trong file .env");
                 jsonResponse(["success" => true, "message" => "Đã duyệt thành công đơn hàng #$order_id (Cảnh báo: không thể gửi email do thiếu cấu hình SMTP)."]);
             }
-
             $mail = new PHPMailer(true);
             $mail->isSMTP();
             $mail->Host       = $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com';
