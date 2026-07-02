@@ -39,11 +39,13 @@ if (empty($_ENV['JWT_SECRET_KEY'])) {
     ]));
 }
 
-$host = $_ENV['DB_HOST'] ?? 'localhost';
-$user = $_ENV['DB_USER'] ?? 'root';
-$password = $_ENV['DB_PASS'] ?? '';
-$database = $_ENV['DB_NAME'] ?? 'coursera_advanced_db';
-$port = isset($_ENV['DB_PORT']) ? (int)$_ENV['DB_PORT'] : 3307;
+$host = $_ENV['DB_HOST'] ?? $_ENV['MYSQLHOST'] ?? 'localhost';
+$user = $_ENV['DB_USER'] ?? $_ENV['MYSQLUSER'] ?? 'root';
+$password = $_ENV['DB_PASS'] ?? $_ENV['MYSQLPASSWORD'] ?? '';
+$database = $_ENV['DB_NAME'] ?? $_ENV['MYSQLDATABASE'] ?? 'coursera_advanced_db';
+$port = isset($_ENV['DB_PORT'])
+    ? (int)$_ENV['DB_PORT']
+    : (isset($_ENV['MYSQLPORT']) ? (int)$_ENV['MYSQLPORT'] : 3307);
 
 $conn = new mysqli($host, $user, $password, $database, $port);
 
