@@ -25,6 +25,10 @@ function jsonResponse($data, $status = 200) {
     exit();
 }
 
+function isVercelRuntime() {
+    return !empty($_ENV['VERCEL']) || getenv('VERCEL') !== false;
+}
+
 if ($pathInfo === '/verify-otp' && $method === 'POST') {
     $email = $input['email'] ?? '';
     $otp = $input['otp'] ?? '';
@@ -477,6 +481,12 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
         jsonResponse(["success" => false, "message" => "Sai cấu trúc Flag! Chuỗi mật mã băm trích xuất không trùng khớp."]);
     }
 } elseif ($pathInfo === '/terminal' && $method === 'POST') {
+    if (isVercelRuntime()) {
+        jsonResponse([
+            "message" => "Tinh nang terminal Docker khong ho tro tren Vercel serverless. Hay tach sang mot backend rieng hoac VPS."
+        ], 501);
+    }
+
     $command = trim($input['command'] ?? '');
     if (empty($command)) jsonResponse(["output" => ""]);
     

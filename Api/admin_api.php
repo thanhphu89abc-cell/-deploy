@@ -132,6 +132,10 @@ function jsonResponse($data, $status = 200) {
     exit();
 }
 
+function isVercelRuntime() {
+    return !empty($_ENV['VERCEL']) || getenv('VERCEL') !== false;
+}
+
 if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     $summary = [];
     $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
@@ -616,6 +620,11 @@ HTML;
 
 } elseif ($pathInfo === '/upload' && $method === 'POST') {
     if (!isset($_FILES['file'])) jsonResponse(['message' => 'Không tìm thấy file.'], 400);
+    if (isVercelRuntime()) {
+        jsonResponse([
+            'message' => 'Upload file vao local disk khong ho tro tren Vercel. Hay dung Vercel Blob, S3, Cloudinary, hoac mot storage ngoai.'
+        ], 501);
+    }
     $file = $_FILES['file'];
     if ($file['error'] !== UPLOAD_ERR_OK) jsonResponse(['message' => 'Lỗi upload file.'], 400);
     

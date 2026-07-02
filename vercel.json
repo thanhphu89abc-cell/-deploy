@@ -1,0 +1,41 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.php": {
+      "runtime": "vercel-php@0.9.0"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/$",
+      "dest": "/api/index.php"
+    },
+    {
+      "src": "^/student_api\\.php(/.*)?$",
+      "dest": "/api/student_api_root.php$1"
+    },
+    {
+      "src": "^/dashboard\\.php$",
+      "dest": "/api/dashboard.php"
+    },
+    {
+      "src": "^/mock_webhook\\.php$",
+      "dest": "/api/mock_webhook.php"
+    },
+    {
+      "src": "^/Auth/(.*)$",
+      "dest": "/api/Auth/$1"
+    },
+    {
+      "src": "^/Api/(.*)$",
+      "dest": "/api/$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}
