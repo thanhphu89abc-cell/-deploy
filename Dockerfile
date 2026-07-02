@@ -18,7 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libzip-dev \
     unzip \
     && docker-php-ext-install mysqli \
-    && a2enmod rewrite \
+    && a2dismod mpm_event || true \
+    && a2enmod mpm_prefork rewrite \
     && rm -rf /var/lib/apt/lists/*
 
 COPY .docker/apache.conf /etc/apache2/sites-available/000-default.conf
