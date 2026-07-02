@@ -31,7 +31,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-$pathInfo = $_SERVER['PATH_INFO'] ?? '/';
+$pathInfo = $_SERVER['PATH_INFO'] ?? '';
+if ($pathInfo === '' || $pathInfo === null) {
+    $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+    $scriptBase = '/' . basename($_SERVER['SCRIPT_NAME'] ?? 'admin_api.php');
+    $scriptPos = stripos($requestUri, $scriptBase);
+    if ($scriptPos !== false) {
+        $pathInfo = substr($requestUri, $scriptPos + strlen($scriptBase));
+    }
+}
+if ($pathInfo === '' || $pathInfo === false) {
+    $pathInfo = '/';
+}
 $method = $_SERVER['REQUEST_METHOD'];
 
 $authHeader = $_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '';
