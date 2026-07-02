@@ -1,0 +1,4 @@
+RewriteEngine On
+
+# Keep old frontend calls working after moving backend files to lowercase /api on Linux hosts.
+RewriteRule ^Api/(.*)$ api/$1 [NC,L,QSA]
