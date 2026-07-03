@@ -147,6 +147,14 @@ function isVercelRuntime() {
     return !empty($_ENV['VERCEL']) || getenv('VERCEL') !== false;
 }
 
+function getPublicUploadDir() {
+    return dirname(__DIR__) . '/uploads/';
+}
+
+function getPublicUploadUrl($filename) {
+    return '/uploads/' . $filename;
+}
+
 if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     $summary = [];
     $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
@@ -639,7 +647,7 @@ HTML;
     $file = $_FILES['file'];
     if ($file['error'] !== UPLOAD_ERR_OK) jsonResponse(['message' => 'Lỗi upload file.'], 400);
     
-    $upload_dir = __DIR__ . '/uploads/';
+    $upload_dir = getPublicUploadDir();
     if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
     
     $filename = basename($file['name']);
@@ -648,8 +656,7 @@ HTML;
     
     $filepath = $upload_dir . $unique_filename;
     if (move_uploaded_file($file['tmp_name'], $filepath)) {
-        $base_dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
-        $file_url = "$base_dir/uploads/$unique_filename";
+        $file_url = getPublicUploadUrl($unique_filename);
         jsonResponse(['message' => 'Upload thành công', 'url' => $file_url]);
     } else {
         jsonResponse(['message' => 'Lưu file thất bại.'], 500);
