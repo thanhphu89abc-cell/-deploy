@@ -10,6 +10,7 @@ Create two services in the same Railway project:
 ## Web service
 
 Railway should detect the `Dockerfile` automatically.
+This image uses PHP's built-in web server instead of Apache to avoid MPM conflicts on Railway.
 
 Set these variables on the `web` service:
 
