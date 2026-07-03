@@ -23,8 +23,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=vendor /app/vendor /var/www/html/vendor
 COPY . /var/www/html
 
-RUN mkdir -p /var/www/html/uploads /var/www/html/videos
+RUN mkdir -p /var/www/html/uploads /var/www/html/videos /var/www/seed_uploads \
+    && cp -R /var/www/html/uploads/. /var/www/seed_uploads/ 2>/dev/null; true
+
+RUN chmod +x /var/www/html/.docker/start-railway.sh
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /var/www/html"]
+CMD ["/var/www/html/.docker/start-railway.sh"]
