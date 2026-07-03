@@ -67,4 +67,6 @@ if ($conn->connect_error) {
         "message" => "Ket noi CSDL that bai: " . $conn->connect_error . " (Host: $host, Port: $port)"
     ]));
 }
+
+$conn->set_charset('utf8mb4');
 ?>
