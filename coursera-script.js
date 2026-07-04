@@ -460,6 +460,31 @@ const App = {
     return defaultImages[hash % defaultImages.length];
   },
 
+  getYoutubeEmbedUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    if (raw.includes("youtube.com/embed/")) {
+      return raw.includes("?") ? raw : `${raw}?autoplay=1&rel=0`;
+    }
+    if (raw.includes("youtube.com/watch") || raw.includes("youtu.be/")) {
+      try {
+        const parsed = new URL(raw);
+        let videoId = "";
+        if (parsed.hostname.includes("youtu.be")) {
+          videoId = parsed.pathname.replace(/^\/+/, "").split("/")[0];
+        } else {
+          videoId = parsed.searchParams.get("v") || "";
+        }
+        if (videoId) {
+          return `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0`;
+        }
+      } catch (error) {
+        return raw;
+      }
+    }
+    return `https://www.youtube.com/embed/${raw}?autoplay=1&rel=0`;
+  },
+
   renderDashboardCourses() {
     if (!this.dom.coursesGrid) return;
 
@@ -893,9 +918,9 @@ const App = {
         videoUrl.includes("youtube.com") ||
         videoUrl.includes("youtu.be")
       ) {
-        this.dom.videoWrapper.innerHTML = `<iframe src="${videoUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full"></iframe>`;
+        this.dom.videoWrapper.innerHTML = `<iframe src="${this.getYoutubeEmbedUrl(videoUrl)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full"></iframe>`;
       } else {
-        this.dom.videoWrapper.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoUrl}?autoplay=1&rel=0" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full"></iframe>`;
+        this.dom.videoWrapper.innerHTML = `<iframe src="${this.getYoutubeEmbedUrl(videoUrl)}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full"></iframe>`;
       }
     } else {
       this.dom.videoWrapper.innerHTML = `<div class="w-full h-full bg-black flex items-center justify-center text-gray-500 font-bold">Bài học không có video</div>`;
