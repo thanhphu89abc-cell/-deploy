@@ -77,6 +77,15 @@ function showConfirmModal(message, onConfirm) {
     };
 }
 
+function toggleAdminSidebar() {
+    const sidebar = document.getElementById('admin-sidebar');
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (sidebar && backdrop) {
+        sidebar.classList.toggle('-translate-x-full');
+        backdrop.classList.toggle('hidden');
+    }
+}
+
 function toggleSelectAll(type) {
     const selectAllElement = document.getElementById(`selectAll${type.charAt(0).toUpperCase() + type.slice(1)}`);
     if (!selectAllElement) return;
@@ -759,6 +768,11 @@ function switchAdminTab(tabName) {
     if(activeLink) {
         activeLink.classList.add('bg-blue-50', 'dark:bg-blue-900/40', 'text-[#0056D2]', 'dark:text-blue-400');
         activeLink.classList.remove('hover:bg-gray-50', 'dark:hover:bg-slate-800/50', 'hover:text-gray-900', 'dark:hover:text-white', 'text-gray-500', 'dark:text-gray-400');
+        
+        const mobileTitle = document.getElementById('mobile-header-title');
+        if (mobileTitle) {
+            mobileTitle.innerText = activeLink.innerText.trim();
+        }
     }
 
     if (tabName === 'dashboard') loadDashboardData();
@@ -766,6 +780,11 @@ function switchAdminTab(tabName) {
     if (tabName === 'users') loadUsers();
     if (tabName === 'courses') loadAdminCourses();
     if (tabName === 'discounts') loadDiscounts();
+
+    const backdrop = document.getElementById('admin-sidebar-backdrop');
+    if (backdrop && !backdrop.classList.contains('hidden')) {
+        toggleAdminSidebar();
+    }
 }
 
 async function loadAdminCourses() {
