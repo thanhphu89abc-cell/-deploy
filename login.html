@@ -26,7 +26,7 @@
 
     <div class="relative z-10">
       <div class="text-center mb-8">
-        <h1 class="text-3xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 mb-2">coursera</h1>
+        <h1 class="text-3xl font-black text-[#0056D2] tracking-tight dark:text-blue-500 mb-2">Coursera</h1>
         <h2 class="text-xl font-bold text-gray-800 dark:text-white">Chào mừng trở lại</h2>
         <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Vui lòng đăng nhập để tiếp tục học tập</p>
       </div>
@@ -81,10 +81,19 @@
           <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
         </div>
 
-        <button type="button" onclick="loginWithGoogle()" class="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm flex justify-center items-center gap-2 mt-4">
-          <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
-          Đăng nhập bằng Google
-        </button>
+        <div id="g_id_onload"
+             data-client_id="1012131444928-fh1rgie6iefocoqrjlmvk46v3op202hm.apps.googleusercontent.com"
+             data-callback="handleGoogleLogin"
+             data-auto_prompt="false">
+        </div>
+        <div class="g_id_signin flex justify-center"
+             data-type="standard"
+             data-size="large"
+             data-theme="outline"
+             data-text="signin_with"
+             data-shape="rectangular"
+             data-logo_alignment="left">
+        </div>
       </form>
 
       <div class="mt-8 text-center text-sm font-medium text-gray-600 dark:text-gray-400">
@@ -157,22 +166,10 @@
       }
     });
 
-    function loginWithGoogle() {
-      const clientId = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com"; // <-- THAY MÃ CLIENT ID CỦA BẠN VÀO ĐÂY SAU NHÉ
-      if (clientId.includes("YOUR_GOOGLE_CLIENT_ID_HERE")) {
-          alert("Nút Google đã hiển thị thành công! \n\nTuy nhiên, để chạy thật, bạn cần vào Google Cloud lấy Client ID thật và thay vào dòng chữ YOUR_GOOGLE_CLIENT_ID_HERE trong file login.html nhé.");
-          return;
-      }
-      google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleGoogleLogin
-      });
-      google.accounts.id.prompt(); // Hiển thị popup chọn tài khoản Google
-    }
-
     async function handleGoogleLogin(response) {
-      submitBtn.disabled = true;
-      submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Đang xác thực Google...</span>';
+      // Show a status message in the error box
+      errorText.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Đang xác thực với Google...</span>';
+      errorBox.className = 'mb-6 p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-sm font-bold flex items-start gap-3 border border-blue-100 dark:border-blue-900/30';
       errorBox.classList.add('hidden');
 
       try {
@@ -187,22 +184,23 @@
         if (res.ok) {
           localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, user: data.user }));
 
+          errorText.innerHTML = '<i class="fa-solid fa-check"></i> <span>Đăng nhập thành công! Đang chuyển hướng...</span>';
+          errorBox.className = 'mb-6 p-4 rounded-xl bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-sm font-bold flex items-start gap-3 border border-green-100 dark:border-green-900/30';
+
           if (data.user.role === 'admin' || data.user.role === 'teacher') {
             const audio = new Audio('sounds/ping.mp3');
             audio.play().catch(e => console.log(e));
-            setTimeout(() => { window.location.href = 'admin.html'; }, 1000);
+            setTimeout(() => { window.location.href = 'admin.html'; }, 800);
           } else {
-            window.location.href = 'coursera-index.html';
+            setTimeout(() => { window.location.href = 'coursera-index.html'; }, 800);
           }
         } else {
-          errorText.innerText = data.message || "Đăng nhập Google thất bại.";
-          errorBox.classList.remove('hidden');
-          submitBtn.disabled = false; submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+          errorText.innerHTML = `<i class="fa-solid fa-circle-exclamation mt-0.5"></i> <span>${data.message || "Đăng nhập Google thất bại."}</span>`;
+          errorBox.className = 'mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-bold flex items-start gap-3 border border-red-100 dark:border-red-900/30';
         }
       } catch (error) {
-        errorText.innerText = "Lỗi kết nối tới máy chủ.";
-        errorBox.classList.remove('hidden');
-        submitBtn.disabled = false; submitBtn.innerHTML = '<span>Đăng nhập</span><i class="fa-solid fa-arrow-right text-sm"></i>';
+        errorText.innerHTML = `<i class="fa-solid fa-circle-exclamation mt-0.5"></i> <span>Lỗi kết nối tới máy chủ.</span>`;
+        errorBox.className = 'mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-sm font-bold flex items-start gap-3 border border-red-100 dark:border-red-900/30';
       }
     }
   </script>

@@ -820,15 +820,15 @@ function renderAdminCourses() {
         const imageUrl = getCourseImage(course.icon);
 
         let html = `<div class="bg-white dark:bg-slate-900 p-6 md:p-8 rounded-3xl border border-gray-100 dark:border-slate-800 mb-6 shadow-sm">
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-4">
                 <div class="flex items-center gap-4">
                     <input type="checkbox" value="${course.id}" class="courses-checkbox rounded border-gray-300 cursor-pointer w-4 h-4 text-blue-600" onchange="checkSelected('courses')">
                     <div class="w-16 h-16 rounded-2xl bg-cover bg-center border border-gray-100 dark:border-slate-700 shrink-0 shadow-sm" style="background-image: url('${imageUrl}')"></div>
                     <h3 class="text-xl font-black text-[#0056D2] dark:text-blue-500">${course.title} <span class="text-xs font-semibold text-gray-500 ml-2">(${course.badge})</span></h3>
                 </div>
-                <div class="space-x-2 flex items-center">
+                <div class="flex flex-wrap items-center gap-2 self-end md:self-center">
                     <button onclick="openAddWeekModal('${course.id}')" class="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-plus mr-1"></i> Thêm Tuần</button>
-                    <button onclick="openCourseEditModal('${course.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa Khóa học</button>
+                    <button onclick="openCourseEditModal('${course.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa Lộ trình</button>
                     <button onclick="deleteCourse('${course.id}')" class="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-trash-can mr-1"></i> Xóa</button>
                 </div>
             </div>
@@ -836,9 +836,9 @@ function renderAdminCourses() {
         
         course.weeks.forEach(week => {
             html += `<div class="ml-2 border-l-2 border-gray-200 dark:border-slate-700 pl-4 mb-4">
-                <div class="flex items-center justify-between mb-2 mt-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-2 mt-4">
                     <h4 class="font-bold text-gray-800 dark:text-gray-200 uppercase text-xs tracking-wider">Tuần ${week.week_number}: ${week.title}</h4>
-                    <div class="space-x-1 flex items-center">
+                    <div class="flex flex-wrap gap-1 items-center self-end sm:self-center">
                         <button onclick="openAddLessonModal('${week.id}')" class="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-200 rounded-lg text-[10px] font-bold transition-colors"><i class="fa-solid fa-plus mr-1"></i> Bài học</button>
                         <button onclick="openEditWeekModal('${course.id}', '${week.id}')" class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 hover:bg-yellow-200 rounded-lg text-[10px] font-bold transition-colors" title="Sửa tuần học"><i class="fa-solid fa-pen"></i></button>
                         <button onclick="deleteWeek('${week.id}')" class="px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 rounded-lg text-[10px] font-bold transition-colors" title="Xóa tuần học"><i class="fa-solid fa-trash-can"></i></button>
@@ -847,12 +847,12 @@ function renderAdminCourses() {
                 <ul class="space-y-2">`;
             
             week.items.forEach(lesson => {
-                html += `<li class="flex items-center justify-between bg-gray-50 dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-800">
+                html += `<li class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 bg-gray-50 dark:bg-slate-800/50 p-3 rounded-xl border border-gray-100 dark:border-slate-800">
                     <div class="flex items-center gap-3">
                       <i class="fa-solid ${lesson.type === 'video' ? 'fa-play-circle text-blue-500' : 'fa-microchip text-purple-500'}"></i>
                       <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">${lesson.title}</span>
                     </div>
-                    <div class="space-x-1 flex items-center">
+                    <div class="flex flex-wrap gap-1 items-center self-end sm:self-center">
                         <button onclick="openLessonEditModal('${course.id}', '${week.id}', '${lesson.id}')" class="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-[#0056D2] dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-pen mr-1"></i> Sửa</button>
                         <button onclick="deleteLesson('${lesson.id}')" class="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 rounded-lg text-xs font-bold transition-colors shadow-sm"><i class="fa-solid fa-trash-can"></i></button>
                     </div>
@@ -1392,12 +1392,14 @@ function renderDiscounts() {
     document.getElementById('selectAllDiscounts') && (document.getElementById('selectAllDiscounts').checked = false);
     document.getElementById('btn-delete-discounts') && document.getElementById('btn-delete-discounts').classList.add('hidden');
     document.getElementById('btn-delete-discounts') && document.getElementById('btn-delete-discounts').classList.remove('flex');
+    checkSelected('discounts');
 
     const tableBody = document.getElementById('discounts-table-body');
     tableBody.innerHTML = '';
     allDiscounts.forEach(d => {
         const isExpired = d.expires_at && new Date(d.expires_at) < new Date();
         const expiryText = d.expires_at ? new Date(d.expires_at).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit', year: 'numeric'}) : '<span class="text-green-500 font-bold">Vô thời hạn</span>';
+        const startsText = d.starts_at ? new Date(d.starts_at).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit', year: 'numeric'}) : '<span class="text-gray-500">Bắt đầu ngay</span>';
         
         let statusBadge = '';
         if (isExpired) {
@@ -1414,6 +1416,7 @@ function renderDiscounts() {
                 <td class="p-4 font-mono font-bold text-[#0056D2] dark:text-blue-400">${d.code}</td>
                 <td class="p-4 font-black text-center text-gray-800 dark:text-gray-200">${Math.round(d.discount_rate * 100)}%</td>
                 <td class="p-4 text-center">${statusBadge}</td>
+                <td class="p-4 text-center text-gray-500 text-xs">${startsText}</td>
                 <td class="p-4 text-center text-gray-500 text-xs">${expiryText}</td>
                 <td class="p-4 text-center space-x-2">
                     <button onclick="deleteDiscount(${d.id})" class="px-3 py-1.5 text-xs font-bold bg-red-100 hover:bg-red-200 text-red-600 rounded-lg"><i class="fa-solid fa-trash-can"></i> Xóa</button>
@@ -1425,6 +1428,7 @@ function renderDiscounts() {
 
 function openDiscountModal() {
     document.getElementById('discount-form').reset();
+    document.getElementById('discount-starts-input').value = '';
     document.getElementById('discount-expiry-input').value = '';
     document.getElementById('discount-modal').classList.remove('hidden');
     setTimeout(() => document.getElementById('discount-modal').classList.remove('opacity-0'), 10);
@@ -1438,6 +1442,7 @@ async function handleDiscountSubmit(event) {
     event.preventDefault();
     const code = document.getElementById('discount-code-input').value;
     const rate = document.getElementById('discount-rate-input').value;
+    const starts_at = document.getElementById('discount-starts-input').value;
     const expires_at = document.getElementById('discount-expiry-input').value;
     const token = JSON.parse(localStorage.getItem('coursera_user_session'))?.token;
     
@@ -1445,7 +1450,7 @@ async function handleDiscountSubmit(event) {
         const response = await fetch('Api/admin_api.php/discounts', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ code, rate, expires_at: expires_at ? expires_at : null })
+            body: JSON.stringify({ code, rate, starts_at: starts_at ? starts_at : null, expires_at: expires_at ? expires_at : null })
         });
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');

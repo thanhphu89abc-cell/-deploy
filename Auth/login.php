@@ -1,4 +1,6 @@
 <?php
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
 ob_start();
 ini_set('display_errors', 0);
 error_reporting(0);
@@ -14,7 +16,9 @@ register_shutdown_function(function() {
 });
 
 require_once dirname(__DIR__) . '/db_connect.php';
-// Sử dụng thư viện JWT đã có
+
+$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0");
+$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL");
 use Firebase\JWT\JWT;
 
 header('Content-Type: application/json; charset=utf-8');

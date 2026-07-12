@@ -1,4 +1,6 @@
 <?php
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
 use PHPMailer\PHPMailer\PHPMailer;
@@ -131,10 +133,16 @@ function jsonResponse($data, $status = 200) {
     }
     exit();
 }
-
+function bindDynamicParams($stmt, $types, &$params) {
+    $refs = [$types];
+    foreach ($params as $key => $value) {
+        $refs[] = &$params[$key];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $refs);
+}
 if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     $summary = [];
-    $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-30 days'));
+    $thirty_days_ago = date('Y-m-d H:i:s', strtotime('-90 days'));
 
     $stmt_stats = $conn->prepare("SELECT SUM(price) as total_revenue, COUNT(id) as total_orders FROM orders WHERE current_step = 3 AND created_at >= ?");
     $stmt_stats->bind_param("s", $thirty_days_ago);
@@ -144,7 +152,7 @@ if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     $summary['stats']['orders'] = $stats['total_orders'] ?? 0;
     $stmt_stats->close();
 
-    $stmt_users = $conn->prepare("SELECT COUNT(id) as total_users FROM users WHERE role = 'student' AND created_at >= ?");
+    $stmt_users = $conn->prepare("SELECT COUNT(id) as total_users FROM users WHERE role = 'student' AND is_blocked = 0 AND created_at >= ?");
     $stmt_users->bind_param("s", $thirty_days_ago);
     $stmt_users->execute();
     $user_stats = $stmt_users->get_result()->fetch_assoc();
@@ -162,7 +170,7 @@ if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     $summary['revenue_chart'] = $revenue_chart;
 
     $recent_orders = [];
-    $res_orders = $conn->query("SELECT o.id, o.course_name, o.price, o.current_step, u.fullname as user_fullname FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.id DESC LIMIT 5");
+    $res_orders = $conn->query("SELECT o.id, o.course_name, o.price, o.current_step, u.fullname as user_fullname FROM orders o LEFT JOIN users u ON o.user_id = u.id ORDER BY o.id DESC LIMIT 5");
     if ($res_orders) {
         while ($row = $res_orders->fetch_assoc()) {
             $recent_orders[] = $row;
@@ -182,15 +190,66 @@ if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     jsonResponse($summary);
 }
 if ($pathInfo === '/orders' && $method === 'GET') {
+    $conn->query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_deleted TINYINT(1) DEFAULT 0");
     $orders = [];
-    $res = $conn->query("SELECT o.id, o.course_name, o.price, o.current_step, o.created_at, u.fullname as user_fullname, u.email as user_email FROM orders o JOIN users u ON o.user_id = u.id ORDER BY o.id DESC");
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+    $offset = ($page - 1) * $limit;
+
+    $search = $_GET['search'] ?? '';
+    $status = $_GET['status'] ?? 'all';
+    $date_from = $_GET['date_from'] ?? '';
+    $date_to = $_GET['date_to'] ?? '';
+    $show_deleted = isset($_GET['show_deleted']) && $_GET['show_deleted'] === 'true';
+
+    $where_clauses = [];
+
+    if (!$show_deleted) {
+        $where_clauses[] = "o.is_deleted = 0";
+    }
+
+    if (!empty($search)) {
+        $safe_search = "'%" . $conn->real_escape_string($search) . "%'";
+        $where_clauses[] = "(u.fullname LIKE $safe_search OR u.email LIKE $safe_search OR o.id LIKE $safe_search)";
+    }
+
+    if ($status !== 'all') {
+        $step_map = ['pending' => 1, 'completed' => 3, 'cancelled' => 4];
+        if (array_key_exists($status, $step_map)) {
+            $where_clauses[] = "o.current_step = " . $step_map[$status];
+        }
+    }
+
+    if (!empty($date_from)) {
+        $safe_date_from = "'" . $conn->real_escape_string($date_from) . " 00:00:00'";
+        $where_clauses[] = "o.created_at >= $safe_date_from";
+    }
+    if (!empty($date_to)) {
+        $safe_date_to = "'" . $conn->real_escape_string($date_to) . " 23:59:59'";
+        $where_clauses[] = "o.created_at <= $safe_date_to";
+    }
+
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    $total_res = $conn->query("SELECT COUNT(o.id) as total FROM orders o LEFT JOIN users u ON o.user_id = u.id $where_sql");
+    if (!$total_res) jsonResponse(["message" => "Lỗi Database (total_res): " . $conn->error], 500);
+    $total_records = $total_res->fetch_assoc()['total'];
+
+    $res = $conn->query("SELECT o.id, o.course_name, o.price, o.current_step, o.created_at, u.fullname as user_fullname, u.email as user_email, o.is_deleted FROM orders o LEFT JOIN users u ON o.user_id = u.id $where_sql ORDER BY o.id DESC LIMIT $limit OFFSET $offset");
+    if (!$res) jsonResponse(["message" => "Lỗi Database (res): " . $conn->error], 500);
+
     if ($res) {
         while ($row = $res->fetch_assoc()) {
             $row['created_at'] = date('d/m/Y H:i', strtotime($row['created_at']));
+            $row['is_deleted'] = (int)$row['is_deleted'];
+            if (is_null($row['user_fullname'])) {
+                $row['user_fullname'] = '[Người dùng đã xóa]';
+                $row['user_email'] = 'N/A';
+            }
             $orders[] = $row;
         }
     }
-    jsonResponse(["orders" => $orders]);
+    jsonResponse(["orders" => $orders, "totalRecords" => $total_records]);
 } elseif (preg_match('#^/approve-order/([^/]+)$#', $pathInfo, $matches) && $method === 'POST') {
     $order_id = $matches[1];
     $stmt = $conn->prepare("UPDATE orders SET current_step = 3 WHERE id = ?");
@@ -275,15 +334,49 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     jsonResponse(["message" => "Đã dọn dẹp toàn bộ đơn hàng bị hủy."]);
 } elseif (preg_match('#^/orders/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {
     $order_id = $matches[1];
-    $stmt = $conn->prepare("DELETE FROM orders WHERE id = ?");
+    $stmt = $conn->prepare("UPDATE orders SET is_deleted = 1 WHERE id = ?");
     $stmt->bind_param("i", $order_id);
     if (!$stmt->execute()) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     jsonResponse(["message" => "Xóa đơn hàng thành công."]);
+} elseif (preg_match('#^/orders/([^/]+)/restore$#', $pathInfo, $matches) && $method === 'POST') {
+    $order_id = $matches[1];
+    $stmt = $conn->prepare("UPDATE orders SET is_deleted = 0 WHERE id = ?");
+    $stmt->bind_param("i", $order_id);
+    if (!$stmt->execute()) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
+    jsonResponse(["message" => "Khôi phục đơn hàng thành công."]);
 
 // 2.2 QUẢN LÝ HỌC VIÊN
 } elseif ($pathInfo === '/users' && $method === 'GET') {
+    $conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked TINYINT(1) DEFAULT 0");
     $users = [];
-    $res = $conn->query("SELECT id, fullname, email, role, created_at, is_blocked FROM users ORDER BY id DESC");
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+    $offset = ($page - 1) * $limit;
+    $search = $_GET['search'] ?? '';
+
+    $where_clauses = [];
+    $params = [];
+    $types = "";
+
+    if (!empty($search)) {
+        $where_clauses[] = "(fullname LIKE ? OR email LIKE ?)";
+        $search_param = "%{$search}%";
+        array_push($params, $search_param, $search_param);
+        $types .= "ss";
+    }
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    $total_stmt = $conn->prepare("SELECT COUNT(*) as total FROM users $where_sql");
+    if (!empty($types)) bindDynamicParams($total_stmt, $types, $params);
+    $total_stmt->execute();
+    $total_records = $total_stmt->get_result()->fetch_assoc()['total'];
+
+    $stmt = $conn->prepare("SELECT id, fullname, email, role, created_at, is_blocked FROM users $where_sql ORDER BY id DESC LIMIT ? OFFSET ?");
+    array_push($params, $limit, $offset);
+    $types .= "ii";
+    bindDynamicParams($stmt, $types, $params);
+    $stmt->execute();
+    $res = $stmt->get_result();
     if ($res) {
         while ($row = $res->fetch_assoc()) {
             $row['created_at'] = isset($row['created_at']) ? date('d/m/Y', strtotime($row['created_at'])) : '---';
@@ -291,7 +384,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
             $users[] = $row;
         }
     }
-    jsonResponse(["users" => $users]);
+    jsonResponse(["users" => $users, "totalRecords" => $total_records]);
 } elseif ($pathInfo === '/users' && $method === 'POST') {
     $fullname = $input['fullname'] ?? ''; $email = $input['email'] ?? ''; $role = $input['role'] ?? 'student'; $password = $input['password'] ?? '123456';
     
@@ -306,7 +399,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     $stmt->close();
     
     $hashed = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $conn->prepare("INSERT INTO users (fullname, email, password_hash, role) VALUES (?, ?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO users (fullname, email, password_hash, role, is_blocked) VALUES (?, ?, ?, ?, 0)");
     if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     $stmt->bind_param("ssss", $fullname, $email, $hashed, $role);
     $stmt->execute();
@@ -321,12 +414,12 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     if ($password) {
         $hashed = password_hash($password, PASSWORD_DEFAULT);
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ?, password_hash = ? WHERE id = ?");
-        if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
-        $stmt->bind_param("sssss", $fullname, $email, $role, $hashed, $uid);
+        if (!$stmt) jsonResponse(["message" => "Lỗi Database (có pass): " . $conn->error], 500);
+        $stmt->bind_param("ssssi", $fullname, $email, $role, $hashed, $uid);
     } else {
         $stmt = $conn->prepare("UPDATE users SET fullname = ?, email = ?, role = ? WHERE id = ?");
-        if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
-        $stmt->bind_param("ssss", $fullname, $email, $role, $uid);
+        if (!$stmt) jsonResponse(["message" => "Lỗi Database (ko pass): " . $conn->error], 500);
+        $stmt->bind_param("sssi", $fullname, $email, $role, $uid);
     }
     $stmt->execute();
     jsonResponse(["message" => "Cập nhật thông tin người dùng thành công."]);
@@ -391,7 +484,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
         <style>
             body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #333; background: #f4f7f6; }
             .invoice-box { max-width: 800px; margin: auto; padding: 40px; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0, 0, 0, .1); font-size: 15px; line-height: 24px; background: #fff; border-radius: 8px; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0056D2; padding-bottom: 20px; margin-bottom: 30px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0056D2; padding-bottom: 20px; margin-bottom: 30px; }
             .title { color: #0056D2; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; }
             .details { display: flex; justify-content: space-between; margin-bottom: 40px; }
             .details div { width: 48%; }
@@ -409,7 +502,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
     <body>
         <div class="invoice-box">
             <div class="header">
-                <div class="title">coursera<span style="font-size:14px; font-weight:normal; color:#555; display:block;">Advanced Information Security</span></div>
+                <div class="title">Coursera<span style="font-size:14px; font-weight:normal; color:#555; display:block;">Advanced Information Security</span></div>
                 <div style="text-align: right;"><strong style="font-size: 18px;">HÓA ĐƠN ĐIỆN TỬ</strong><br>Mã số: <strong>INV-{$order_id_padded}</strong><br>Ngày lập: {$created_date}</div>
             </div>
             <div class="details">
@@ -452,7 +545,7 @@ HTML;
         
         $weeks_stmt = $conn->prepare("SELECT id, course_id, week_number, title FROM course_weeks WHERE course_id IN ($placeholders) ORDER BY course_id, week_number");
         if ($weeks_stmt) {
-            $weeks_stmt->bind_param($types, ...$course_ids);
+            bindDynamicParams($weeks_stmt, $types, $course_ids);
             $weeks_stmt->execute();
             $weeks_res = $weeks_stmt->get_result();
             $week_map = [];
@@ -467,7 +560,7 @@ HTML;
                 $types_lessons = str_repeat('i', count($week_ids));
                 $lessons_stmt = $conn->prepare("SELECT * FROM lessons WHERE week_id IN ($placeholders_lessons) ORDER BY week_id, id");
                 if ($lessons_stmt) {
-                    $lessons_stmt->bind_param($types_lessons, ...$week_ids);
+                    bindDynamicParams($lessons_stmt, $types_lessons, $week_ids);
                     $lessons_stmt->execute();
                     $lessons_res = $lessons_stmt->get_result();
                     while ($lesson = $lessons_res->fetch_assoc()) { if (isset($week_map[$lesson['week_id']])) { $week_map[$lesson['week_id']]['items'][] = $lesson; } }
@@ -571,7 +664,34 @@ HTML;
 
 } elseif ($pathInfo === '/discounts' && $method === 'GET') {
     $discounts = [];
-    $res = $conn->query("SELECT * FROM discount_codes ORDER BY id DESC");
+    $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS starts_at DATETIME NULL AFTER discount_rate");
+    $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
+    $offset = ($page - 1) * $limit;
+    $search = $_GET['search'] ?? '';
+
+    $where_clauses = [];
+    $params = [];
+    $types = "";
+
+    if (!empty($search)) {
+        $where_clauses[] = "code LIKE ?";
+        $params[] = "%{$search}%";
+        $types .= "s";
+    }
+    $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+    $total_stmt = $conn->prepare("SELECT COUNT(*) as total FROM discount_codes $where_sql");
+    if (!empty($types)) bindDynamicParams($total_stmt, $types, $params);
+    $total_stmt->execute();
+    $total_records = $total_stmt->get_result()->fetch_assoc()['total'];
+
+    $stmt = $conn->prepare("SELECT * FROM discount_codes $where_sql ORDER BY id DESC LIMIT ? OFFSET ?");
+    array_push($params, $limit, $offset);
+    $types .= "ii";
+    bindDynamicParams($stmt, $types, $params);
+    $stmt->execute();
+    $res = $stmt->get_result();
     if (!$res) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
     if ($res) {
         while ($row = $res->fetch_assoc()) {
@@ -579,10 +699,11 @@ HTML;
             $discounts[] = $row;
         }
     }
-    jsonResponse(["discounts" => $discounts]);
+    jsonResponse(["discounts" => $discounts, "totalRecords" => $total_records]);
 } elseif ($pathInfo === '/discounts' && $method === 'POST') {
     $code = strtoupper(trim($input['code'] ?? '')); $rate = floatval($input['rate'] ?? 0) / 100.0;
     $expires_at = !empty($input['expires_at']) ? $input['expires_at'] : null;
+    $starts_at = !empty($input['starts_at']) ? $input['starts_at'] : null;
     
     $stmt = $conn->prepare("SELECT id FROM discount_codes WHERE code = ?");
     if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
@@ -594,9 +715,9 @@ HTML;
     }
     $stmt->close();
     
-    $stmt = $conn->prepare("INSERT INTO discount_codes (code, discount_rate, expires_at) VALUES (?, ?, ?)");
+    $stmt = $conn->prepare("INSERT INTO discount_codes (code, discount_rate, starts_at, expires_at) VALUES (?, ?, ?, ?)");
     if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);
-    $stmt->bind_param("sds", $code, $rate, $expires_at);
+    $stmt->bind_param("sdss", $code, $rate, $starts_at, $expires_at);
     $stmt->execute();
     jsonResponse(["message" => "Thêm mã giảm giá thành công."], 201);
 } elseif (preg_match('#^/discounts/([^/]+)$#', $pathInfo, $matches) && $method === 'DELETE') {

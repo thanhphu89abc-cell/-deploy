@@ -82,6 +82,8 @@ const App = {
       paymentModal: document.getElementById("payment-modal"),
       accountModal: document.getElementById("account-modal"),
       pageLoader: document.getElementById("page-loader"),
+      mainContentArea: document.querySelector(".flex-1.overflow-y-auto"),
+      backToTopButton: document.getElementById("back-to-top-btn"),
     };
   },
 
@@ -92,6 +94,8 @@ const App = {
     this.dom.terminalInput?.addEventListener("keypress", (e) => {
       if (e.key === "Enter") this.executeTerminalCommand();
     });
+    this.dom.mainContentArea?.addEventListener("scroll", handleScroll);
+    this.dom.backToTopButton?.addEventListener("click", scrollToTop);
   },
 
   async checkAuth() {
@@ -2255,6 +2259,21 @@ async function handleModalUpdateProfile(event) {
 function closePaymentModal() {
   const modal = document.getElementById("payment-modal");
   if (modal) modal.classList.add("hidden");
+}
+
+function handleScroll() {
+    if (!App.dom.mainContentArea || !App.dom.backToTopButton) return;
+    if (App.dom.mainContentArea.scrollTop > 400) {
+        App.dom.backToTopButton.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-10');
+    } else {
+        App.dom.backToTopButton.classList.add('opacity-0', 'pointer-events-none', 'translate-y-10');
+    }
+}
+
+function scrollToTop() {
+    if (App.dom.mainContentArea) {
+        App.dom.mainContentArea.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 }
 
 document.addEventListener("DOMContentLoaded", () => App.init());

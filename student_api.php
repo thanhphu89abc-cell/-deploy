@@ -293,20 +293,27 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     if (!$order_id || !$code) jsonResponse(["message" => "Thiếu thông tin mã giảm giá hoặc đơn hàng!"], 400);
 
-    $stmt = $conn->prepare("SELECT discount_rate, expires_at FROM discount_codes WHERE code = ? AND is_active = 1");
+    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS starts_at DATETIME NULL AFTER discount_rate");
+    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS expires_at DATETIME NULL AFTER starts_at");
+
+    $stmt = $conn->prepare("SELECT discount_rate, expires_at, starts_at FROM discount_codes WHERE code = ? AND is_active = 1");
     if (!$stmt) {
-        $conn->query("ALTER TABLE discount_codes ADD COLUMN expires_at DATETIME NULL");
-        $stmt = $conn->prepare("SELECT discount_rate, expires_at FROM discount_codes WHERE code = ? AND is_active = 1");
+        jsonResponse(["message" => "Lỗi truy vấn CSDL."], 500);
     }
     $stmt->bind_param("s", $code);
     $stmt->execute();
     $discount_row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
-    if (!$discount_row) jsonResponse(["message" => "Mã giảm giá không hợp lệ hoặc đã bị khóa!"], 400);
+    if (!$discount_row) {
+        jsonResponse(["message" => "Mã giảm giá không hợp lệ hoặc đã bị khóa!"], 400);
+    }
 
+    if (!empty($discount_row['starts_at']) && strtotime($discount_row['starts_at']) > time()) {
+        jsonResponse(["message" => "Mã giảm giá này chưa đến thời gian sử dụng!"], 400);
+    }
     if (!empty($discount_row['expires_at']) && strtotime($discount_row['expires_at']) < time()) {
-        jsonResponse(["message" => "Mã giảm giá này đã hết thời gian sử dụng!"], 400);
+        jsonResponse(["message" => "Mã giảm giá này đã hết hạn sử dụng!"], 400);
     }
 
     $discount_rate = floatval($discount_row['discount_rate']);
@@ -526,7 +533,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
                 <div class="course-name">{$title}</div>
                 
                 <div class="seal">
-                    <div class="seal-text">COURSERA<br>CERTIFIED<br>2024</div>
+                    <div class="seal-text">COURSERA<br>CERTIFIED<br>2026</div>
                 </div>
                 
                 <div class="footer">
