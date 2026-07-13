@@ -22,7 +22,7 @@
     <div class="absolute -top-10 -right-10 w-32 h-32 bg-[#0056D2]/5 dark:bg-blue-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
     <div class="text-center mb-8 relative z-10">
-      <h1 class="text-3xl font-black text-[#0056D2] tracking-tight mb-2">coursera</h1>
+      <h1 class="text-3xl font-black text-[#0056D2] tracking-tight mb-2">Coursera</h1>
       <p class="text-gray-500 dark:text-gray-400 font-semibold">Khởi đầu hành trình An ninh mạng</p>
     </div>
 
@@ -87,10 +87,19 @@
         <div class="flex-1 h-px bg-gray-200 dark:bg-slate-800"></div>
       </div>
 
-      <button type="button" onclick="loginWithGoogle()" class="w-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-gray-200 font-bold py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors shadow-sm flex justify-center items-center gap-2">
-        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5" alt="Google">
-        Đăng ký bằng Google
-      </button>
+      <div id="g_id_onload"
+           data-client_id="1012131444928-fh1rgie6iefocoqrjlmvk46v3op202hm.apps.googleusercontent.com"
+           data-callback="handleGoogleLogin"
+           data-auto_prompt="false">
+      </div>
+      <div class="g_id_signin flex justify-center"
+           data-type="standard"
+           data-size="large"
+           data-theme="outline"
+           data-text="signup_with"
+           data-shape="rectangular"
+           data-logo_alignment="left">
+      </div>
 
       <div id="status-msg" class="hidden mt-3 text-center text-sm font-bold"></div>
 
@@ -180,25 +189,33 @@
     });
 
     function loginWithGoogle() {
-      const clientId = "YOUR_GOOGLE_CLIENT_ID_HERE.apps.googleusercontent.com"; // <-- THAY MÃ CLIENT ID CỦA BẠN VÀO ĐÂY SAU NHÉ
+      const clientId = "1012131444928-fh1rgie6iefocoqrjlmvk46v3op202hm.apps.googleusercontent.com";
+      const statusMsg = document.getElementById('status-msg');
+
       if (clientId.includes("YOUR_GOOGLE_CLIENT_ID_HERE")) {
-          alert("Nút Google đã hiển thị thành công! \n\nTuy nhiên, để chạy thật, bạn cần vào Google Cloud lấy Client ID thật và thay vào dòng chữ YOUR_GOOGLE_CLIENT_ID_HERE trong file register.html nhé.");
+          statusMsg.innerHTML = `<strong>Lỗi cấu hình:</strong> Bạn cần thay thế <code>YOUR_GOOGLE_CLIENT_ID_HERE</code> trong file <strong>register.html</strong> bằng Client ID thật từ Google Cloud Console.`;
+          statusMsg.className = 'mt-3 text-center text-sm font-bold text-red-500 dark:text-red-400 block';
           return;
       }
-      google.accounts.id.initialize({
-        client_id: clientId,
-        callback: handleGoogleLogin
-      });
-      google.accounts.id.prompt(); 
+      try {
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleLogin
+        });
+        google.accounts.id.prompt(); 
+      } catch (e) {
+        console.error("Lỗi khởi tạo Google Sign-In:", e);
+        statusMsg.innerText = "Lỗi khởi tạo đăng nhập Google. Vui lòng kiểm tra Console (F12).";
+        statusMsg.className = 'mt-3 text-center text-sm font-bold text-red-500 dark:text-red-400 block';
+      }
     }
 
     async function handleGoogleLogin(response) {
       const btn = document.getElementById('submit-btn');
       const statusMsg = document.getElementById('status-msg');
       btn.disabled = true;
-      statusMsg.classList.remove('hidden', 'text-red-500', 'dark:text-red-400');
-      statusMsg.classList.add('text-blue-600', 'dark:text-blue-400');
-      statusMsg.innerText = "Đang xác thực Google...";
+      statusMsg.className = 'mt-3 text-center text-sm font-bold text-blue-600 dark:text-blue-400 block';
+      statusMsg.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Đang xác thực với Google...';
 
       try {
         const res = await fetch('Auth/login.php', {
@@ -210,7 +227,7 @@
         if (res.ok) {
           localStorage.setItem('coursera_user_session', JSON.stringify({ token: data.token, user: data.user }));
           statusMsg.className = 'mt-3 text-center text-sm font-bold text-green-600 dark:text-green-400 block';
-          statusMsg.innerText = "Xác thực thành công! Đang chuyển hướng...";
+          statusMsg.innerHTML = '<i class="fa-solid fa-check"></i> Xác thực thành công! Đang chuyển hướng...';
           setTimeout(() => window.location.href = (data.user.role === 'admin' || data.user.role === 'teacher') ? 'admin.html' : 'coursera-index.html', 1000);
         } else {
           throw new Error(data.message);

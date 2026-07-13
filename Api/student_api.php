@@ -1,4 +1,6 @@
 <?php
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
 require_once dirname(__DIR__) . '/db_connect.php';
 
 use Firebase\JWT\JWT;
@@ -35,11 +37,16 @@ function jsonResponse($data, $status = 200) {
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit();
 }
-
 function isVercelRuntime() {
     return !empty($_ENV['VERCEL']) || getenv('VERCEL') !== false;
 }
-
+function bindDynamicParams($stmt, $types, &$params) {
+    $refs = [$types];
+    foreach ($params as $key => $value) {
+        $refs[] = &$params[$key];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $refs);
+}
 if ($pathInfo === '/verify-otp' && $method === 'POST') {
     $email = $input['email'] ?? '';
     $otp = $input['otp'] ?? '';
@@ -151,7 +158,10 @@ try {
 
 if ($pathInfo === '/courses' && $method === 'GET') {
     $courses_res = $conn->query("SELECT id, title, original_price, price, badge, color, icon FROM courses");
-    if (!$courses_res) jsonResponse(["message" => "Lỗi CSDL (courses)"], 500);
+    if (!$courses_res) {
+        jsonResponse(["message" => "Lỗi CSDL (courses): " . $conn->error], 500);
+    }
+    
     $courses = [];
     $course_map = [];
     while ($c = $courses_res->fetch_assoc()) {
@@ -160,53 +170,65 @@ if ($pathInfo === '/courses' && $method === 'GET') {
         $course_map[$c['id']] = &$courses[count($courses) - 1];
     }
     $course_ids = array_keys($course_map);
-
     if (empty($course_ids)) {
         jsonResponse(["courses" => []]);
     }
 
+    // [FIX 1] Thay thế fetch_all bằng vòng lặp while an toàn tuyệt đối
+    $completed_lessons = [];
     $progress_stmt = $conn->prepare("SELECT lesson_id FROM user_progress WHERE user_id = ?");
-    $progress_stmt->bind_param("i", $user_id);
-    $progress_stmt->execute();
-    $completed_lessons = array_flip(array_column($progress_stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'lesson_id'));
-    $progress_stmt->close();
+    if ($progress_stmt) {
+        $progress_stmt->bind_param("i", $user_id);
+        $progress_stmt->execute();
+        $res_prog = $progress_stmt->get_result();
+        if ($res_prog) {
+            while ($row = $res_prog->fetch_assoc()) {
+                $completed_lessons[$row['lesson_id']] = true;
+            }
+        }
+        $progress_stmt->close();
+    }
 
-    $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
-    $weeks_stmt = $conn->prepare("SELECT id, course_id, week_number, title FROM course_weeks WHERE course_id IN ($placeholders) ORDER BY week_number");
+    // [FIX 2] Xử lý truy vấn IN an toàn, không cần dùng bind_param phức tạp
+    $safe_course_ids = array_map(function($id) use ($conn) {
+        return "'" . $conn->real_escape_string($id) . "'";
+    }, $course_ids);
+    $in_clause_courses = implode(',', $safe_course_ids);
+
+    $weeks_res = $conn->query("SELECT id, course_id, week_number, title FROM course_weeks WHERE course_id IN ($in_clause_courses) ORDER BY course_id, week_number");
     
-    $types = str_repeat('s', count($course_ids));
-    $params = array_merge([$types], $course_ids);
-    $refs = [];
-    foreach($params as $key => $value) $refs[$key] = &$params[$key];
-    call_user_func_array([$weeks_stmt, 'bind_param'], $refs);
-    
-    $weeks_stmt->execute();
-    $weeks_res = $weeks_stmt->get_result();
     $week_map = [];
-    while ($w = $weeks_res->fetch_assoc()) {
-        $w['items'] = [];
-        $week_map[$w['id']] = $w;
+    if ($weeks_res) {
+        while ($w = $weeks_res->fetch_assoc()) {
+            $w['items'] = [];
+            $week_map[$w['id']] = $w;
+        }
     }
     $week_ids = array_keys($week_map);
 
     if (!empty($week_ids)) {
-        $placeholders_lessons = implode(',', array_fill(0, count($week_ids), '?'));
-        $lessons_stmt = $conn->prepare("SELECT id, week_id, type, title, duration, video_url as videoSrc, description, quiz_question, quiz_option_a, quiz_option_b, quiz_correct_answer FROM lessons WHERE week_id IN ($placeholders_lessons) ORDER BY id");
+        $safe_week_ids = array_map(function($id) use ($conn) {
+            return "'" . $conn->real_escape_string($id) . "'";
+        }, $week_ids);
+        $in_clause_weeks = implode(',', $safe_week_ids);
         
-        $types_lessons = str_repeat('i', count($week_ids));
-        $params_lessons = array_merge([$types_lessons], $week_ids);
-        $refs_lessons = [];
-        foreach($params_lessons as $key => $value) $refs_lessons[$key] = &$params_lessons[$key];
-        call_user_func_array([$lessons_stmt, 'bind_param'], $refs_lessons);
+        $lessons_res = $conn->query("SELECT id, week_id, type, title, duration, video_url as videoSrc, description, quiz_question, quiz_option_a, quiz_option_b, quiz_correct_answer FROM lessons WHERE week_id IN ($in_clause_weeks) ORDER BY week_id, id");
         
-        $lessons_stmt->execute();
-        $lessons_res = $lessons_stmt->get_result();
-        
-        while ($lesson = $lessons_res->fetch_assoc()) {
-            $lesson['completed'] = isset($completed_lessons[$lesson['id']]);
-            $lesson['quiz'] = !empty($lesson['quiz_question']) ? ["question" => $lesson['quiz_question'], "options" => [["v" => "a", "t" => $lesson['quiz_option_a']], ["v" => "b", "t" => $lesson['quiz_option_b']]], "correct" => $lesson['quiz_correct_answer']] : null;
-            if (isset($week_map[$lesson['week_id']])) {
-                $week_map[$lesson['week_id']]['items'][] = $lesson;
+        if ($lessons_res) {
+            while ($lesson = $lessons_res->fetch_assoc()) {
+                $lesson['completed'] = isset($completed_lessons[$lesson['id']]);
+                $lesson['quiz'] = !empty($lesson['quiz_question']) ? [
+                    "question" => $lesson['quiz_question'], 
+                    "options" => [
+                        ["v" => "a", "t" => $lesson['quiz_option_a']], 
+                        ["v" => "b", "t" => $lesson['quiz_option_b']]
+                    ], 
+                    "correct" => $lesson['quiz_correct_answer']
+                ] : null;
+                
+                if (isset($week_map[$lesson['week_id']])) {
+                    $week_map[$lesson['week_id']]['items'][] = $lesson;
+                }
             }
         }
     }
@@ -217,8 +239,7 @@ if ($pathInfo === '/courses' && $method === 'GET') {
     }
     jsonResponse(["courses" => $courses]);
 }
-
-if ($pathInfo === '/checkout' && $method === 'POST') {
+ elseif ($pathInfo === '/checkout' && $method === 'POST') {
     $course_id = $input['course_id'] ?? '';
     if (!$course_id) jsonResponse(["message" => "Thiếu mã khóa học!"], 400);
 
@@ -266,15 +287,24 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     if (!$order_id || !$code) jsonResponse(["message" => "Thiếu thông tin mã giảm giá hoặc đơn hàng!"], 400);
 
-    $stmt = $conn->prepare("SELECT discount_rate, expires_at FROM discount_codes WHERE code = ? AND is_active = 1");
+    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS starts_at DATETIME NULL AFTER discount_rate");
+    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS expires_at DATETIME NULL AFTER starts_at");
+
+    $stmt = $conn->prepare("SELECT discount_rate, expires_at, starts_at FROM discount_codes WHERE code = ? AND is_active = 1");
     $stmt->bind_param("s", $code);
     $stmt->execute();
     $discount_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
-    if (!$discount_row) jsonResponse(["message" => "Mã giảm giá không hợp lệ hoặc đã bị khóa!"], 400);
+    if (!$discount_row) {
+        jsonResponse(["message" => "Mã giảm giá không hợp lệ hoặc đã bị khóa!"], 400);
+    }
 
+    if (!empty($discount_row['starts_at']) && strtotime($discount_row['starts_at']) > time()) {
+        jsonResponse(["message" => "Mã giảm giá này chưa đến thời gian sử dụng!"], 400);
+    }
     if (!empty($discount_row['expires_at']) && strtotime($discount_row['expires_at']) < time()) {
-        jsonResponse(["message" => "Mã giảm giá này đã hết thời gian sử dụng!"], 400);
+        jsonResponse(["message" => "Mã giảm giá này đã hết hạn sử dụng!"], 400);
     }
 
     $discount_rate = floatval($discount_row['discount_rate']);
@@ -453,7 +483,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
                 <div class="course-name">{$title}</div>
                 
                 <div class="seal">
-                    <div class="seal-text">COURSERA<br>CERTIFIED<br>2024</div>
+                    <div class="seal-text">COURSERA<br>CERTIFIED<br>2026</div>
                 </div>
                 
                 <div class="footer">
@@ -532,7 +562,7 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
     $placeholders = implode(',', array_fill(0, count($course_ids), '?'));
     $types = str_repeat('s', count($course_ids));
     $stmt = $conn->prepare("SELECT id, title, price FROM courses WHERE id IN ($placeholders)");
-    $stmt->bind_param($types, ...$course_ids);
+    bindDynamicParams($stmt, $types, $course_ids);
     $stmt->execute();
     $res = $stmt->get_result();
     if (!$res) jsonResponse(["message" => "Lỗi Database (courses): " . $conn->error], 500);
