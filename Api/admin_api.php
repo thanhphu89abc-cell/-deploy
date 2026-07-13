@@ -702,6 +702,7 @@ HTML;
     $discounts = [];
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
     addColumnIfMissing($conn, 'discount_codes', 'starts_at', 'DATETIME NULL AFTER discount_rate');
+    addColumnIfMissing($conn, 'discount_codes', 'expires_at', 'DATETIME NULL AFTER starts_at');
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
     $offset = ($page - 1) * $limit;
     $search = $_GET['search'] ?? '';
@@ -740,6 +741,8 @@ HTML;
     $code = strtoupper(trim($input['code'] ?? '')); $rate = floatval($input['rate'] ?? 0) / 100.0;
     $expires_at = !empty($input['expires_at']) ? $input['expires_at'] : null;
     $starts_at = !empty($input['starts_at']) ? $input['starts_at'] : null;
+    addColumnIfMissing($conn, 'discount_codes', 'starts_at', 'DATETIME NULL AFTER discount_rate');
+    addColumnIfMissing($conn, 'discount_codes', 'expires_at', 'DATETIME NULL AFTER starts_at');
     
     $stmt = $conn->prepare("SELECT id FROM discount_codes WHERE code = ?");
     if (!$stmt) jsonResponse(["message" => "Lỗi Database: " . $conn->error], 500);

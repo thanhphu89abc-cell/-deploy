@@ -51,6 +51,19 @@ function jsonResponse($data, $status = 200) {
     exit();
 }
 
+function columnExists($conn, $table, $column) {
+    $safeTable = $conn->real_escape_string($table);
+    $safeColumn = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+    return $result && $result->num_rows > 0;
+}
+
+function addColumnIfMissing($conn, $table, $column, $definition) {
+    if (!columnExists($conn, $table, $column)) {
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+    }
+}
+
 // ==============================================
 // 1. CÁC API KHÔNG CẦN ĐĂNG NHẬP (LẤY LẠI MẬT KHẨU)
 // ==============================================
@@ -304,8 +317,8 @@ if ($pathInfo === '/checkout' && $method === 'POST') {
 
     if (!$order_id || !$code) jsonResponse(["message" => "Thiếu thông tin mã giảm giá hoặc đơn hàng!"], 400);
 
-    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS starts_at DATETIME NULL AFTER discount_rate");
-    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS expires_at DATETIME NULL AFTER starts_at");
+    addColumnIfMissing($conn, 'discount_codes', 'starts_at', 'DATETIME NULL AFTER discount_rate');
+    addColumnIfMissing($conn, 'discount_codes', 'expires_at', 'DATETIME NULL AFTER starts_at');
 
     $stmt = $conn->prepare("SELECT discount_rate, expires_at, starts_at FROM discount_codes WHERE code = ? AND is_active = 1");
     if (!$stmt) {
