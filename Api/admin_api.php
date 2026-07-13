@@ -155,6 +155,20 @@ function getPublicUploadDir() {
 function getPublicUploadUrl($filename) {
     return '/uploads/' . $filename;
 }
+
+function columnExists($conn, $table, $column) {
+    $safeTable = $conn->real_escape_string($table);
+    $safeColumn = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+    return $result && $result->num_rows > 0;
+}
+
+function addColumnIfMissing($conn, $table, $column, $definition) {
+    if (!columnExists($conn, $table, $column)) {
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+    }
+}
+
 function bindDynamicParams($stmt, $types, &$params) {
     $refs = [$types];
     foreach ($params as $key => $value) {
@@ -212,7 +226,7 @@ if ($pathInfo === '/dashboard-summary' && $method === 'GET') {
     jsonResponse($summary);
 }
 if ($pathInfo === '/orders' && $method === 'GET') {
-    $conn->query("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_deleted TINYINT(1) DEFAULT 0");
+    addColumnIfMissing($conn, 'orders', 'is_deleted', 'TINYINT(1) DEFAULT 0');
     $orders = [];
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
@@ -369,7 +383,7 @@ if ($pathInfo === '/orders' && $method === 'GET') {
 
 // 2.2 QUẢN LÝ HỌC VIÊN
 } elseif ($pathInfo === '/users' && $method === 'GET') {
-    $conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked TINYINT(1) DEFAULT 0");
+    addColumnIfMissing($conn, 'users', 'is_blocked', 'TINYINT(1) DEFAULT 0');
     $users = [];
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
@@ -687,7 +701,7 @@ HTML;
 } elseif ($pathInfo === '/discounts' && $method === 'GET') {
     $discounts = [];
     $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
-    $conn->query("ALTER TABLE discount_codes ADD COLUMN IF NOT EXISTS starts_at DATETIME NULL AFTER discount_rate");
+    addColumnIfMissing($conn, 'discount_codes', 'starts_at', 'DATETIME NULL AFTER discount_rate');
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 20;
     $offset = ($page - 1) * $limit;
     $search = $_GET['search'] ?? '';

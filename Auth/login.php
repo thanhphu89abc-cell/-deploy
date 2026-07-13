@@ -17,8 +17,21 @@ register_shutdown_function(function() {
 
 require_once dirname(__DIR__) . '/db_connect.php';
 
-$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_attempts INT DEFAULT 0");
-$conn->query("ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until DATETIME NULL");
+function columnExists($conn, $table, $column) {
+    $safeTable = $conn->real_escape_string($table);
+    $safeColumn = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM `{$safeTable}` LIKE '{$safeColumn}'");
+    return $result && $result->num_rows > 0;
+}
+
+function addColumnIfMissing($conn, $table, $column, $definition) {
+    if (!columnExists($conn, $table, $column)) {
+        $conn->query("ALTER TABLE `{$table}` ADD COLUMN `{$column}` {$definition}");
+    }
+}
+
+addColumnIfMissing($conn, 'users', 'failed_attempts', 'INT DEFAULT 0');
+addColumnIfMissing($conn, 'users', 'locked_until', 'DATETIME NULL');
 use Firebase\JWT\JWT;
 
 header('Content-Type: application/json; charset=utf-8');
